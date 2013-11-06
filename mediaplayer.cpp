@@ -56,7 +56,7 @@ if(strcmp(protocol,"http") == 0 || strcmp(protocol,"https") == 0 || strcmp(proto
 
 
 int mediaplayer::loadfile(char *url,stream_context *streamcontext){
-sc->pFormatCtx = avformat_alloc_context();
+//sc->pFormatCtx = avformat_alloc_context();
 stream_context *sc = streamcontext;
 AVInputFormat *format = NULL;
 //AVProbeData pd;
