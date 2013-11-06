@@ -237,7 +237,7 @@ void *exit;
 
 
 //pthread_create(&test_thread,NULL,test_status,mp); 
-//mp->play();
+mp->play();
 
  int keypress = 0;
 int fc = 0;
