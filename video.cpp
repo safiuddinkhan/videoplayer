@@ -8,6 +8,7 @@
 int mediaplayer::getdecodedvideoframe(stream_context *sc,AVFrame *vidframe){
 int vidframefinished;
 AVPacket packet;
+av_init_packet(&packet);
 int len = 0;
 //while(true){
 //cout <<"New Loop..."<<endl;
@@ -69,10 +70,13 @@ packet = sc->videobuffer.front();
 sc->videobuffer.pop();
 pthread_mutex_unlock(&sc->videolock); 
 
+//packet.flags = AV_PKT_FLAG_KEY;
+
+
 len = avcodec_decode_video2(sc->videoctx, vidframe, &vidframefinished,&packet);
 av_free_packet(&packet);
 
-cout <<"len:"<<len<<endl;
+
 if(len < 0){
 return -3;
 }
@@ -83,10 +87,10 @@ if(vidframefinished){
 return 0;
 }
 
- //if (packet.data) {
- // packet.size -= len;
- // packet.data += len;
- // }
+// if (packet.data) {
+//  packet.size -= len;
+//  packet.data += len;
+//  }
 
 //pthread_mutex_lock(&sc->demuxlock);
 //pthread_cond_broadcast(&sc->demuxcond);
@@ -118,6 +122,38 @@ int ret;
 double duration;
 double video_decode_delay = 0;
 int ts_diff;
+////////////////////////////////////////////////////////////////
+int numBytes;
+uint8_t *vidbuffer;
+AVFrame *vidframe1;
+int height;
+int width;
+SwsContext * convert_ctx;
+
+AVPixelFormat dstfmt = get_avpixelformat(sc->pixel_format);
+if(dstfmt == AV_PIX_FMT_NONE){
+  dstfmt = AV_PIX_FMT_RGB24;
+  cout <<"Cannot Find your FourCC code falling to RGB24 pixel format"<<endl;
+}
+
+cout <<sc->pixel_format<<endl;
+
+vidframe1 = avcodec_alloc_frame();
+height = sc->videoctx->height;
+width = sc->videoctx->width;
+
+numBytes=avpicture_get_size(dstfmt ,width,height);
+vidbuffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
+avpicture_fill((AVPicture *)vidframe1, vidbuffer, dstfmt ,width, height);
+
+//mm = mp;
+
+convert_ctx = sws_getContext(width, height, sc->videoctx->pix_fmt,
+                                   width, height,dstfmt,
+                                   SWS_BICUBIC, NULL, NULL, NULL );
+
+
+////////////////////////////////////////////////////////////////
 while(true){
 
 videopause:
@@ -211,7 +247,7 @@ delay = 0;
 av_usleep(delay);
 //cout <<"Delay:"<<delay<<" - Duration:"<<duration<<endl;
 
-
+/*
 sc->vout1->data = vidframe->data;
 sc->vout1->linesize = vidframe->linesize; 
 sc->vout1->pts = sc->videopts;
@@ -219,6 +255,11 @@ if(sc->cc == NULL)
 sc->vout = sc->vout1;
 else
 sc->vout = sc->cc->convert(sc->vout1);
+*/
+
+
+sws_scale(convert_ctx,vidframe->data,vidframe->linesize,0,height,vidframe1->data,vidframe1->linesize);
+
 
 SDL_LockYUVOverlay(surf);
 
@@ -232,14 +273,14 @@ SDL_LockYUVOverlay(surf);
 //sc->vout->data[1] = surf->pixels[2];
 //sc->vout->data[2] = surf->pixels[1];
 
-memcpy(surf->pixels[0],sc->vout->data[0],(sc->videoctx->height * sc->videoctx->width));
-memcpy(surf->pixels[1],sc->vout->data[2],(sc->videoctx->height * sc->videoctx->width)/4);
-memcpy(surf->pixels[2],sc->vout->data[1],(sc->videoctx->height * sc->videoctx->width)/4);
+memcpy(surf->pixels[0],vidframe1->data[0],(sc->videoctx->height * sc->videoctx->width));
+memcpy(surf->pixels[1],vidframe1->data[2],(sc->videoctx->height * sc->videoctx->width)/4);
+memcpy(surf->pixels[2],vidframe1->data[1],(sc->videoctx->height * sc->videoctx->width)/4);
 
 
-sc->vout->linesize[0] = surf->pitches[0];
-sc->vout->linesize[1] = surf->pitches[2];
-sc->vout->linesize[2] = surf->pitches[1];
+vidframe1->linesize[0] = surf->pitches[0];
+vidframe1->linesize[1] = surf->pitches[2];
+vidframe1->linesize[2] = surf->pitches[1];
 
 
 SDL_UnlockYUVOverlay(surf);
@@ -276,6 +317,9 @@ pthread_mutex_unlock(&sc->end_status_lock2);
 
 pthread_cond_broadcast(&sc->decodecond);
 av_free(vidframe);
+av_free(vidframe1);
+sws_freeContext (convert_ctx);
+av_freep(&vidbuffer); 
 cout <<"loop break"<<endl;
 //sc->status = MP_STOP; 
 //sc->stop = 1;

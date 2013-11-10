@@ -196,7 +196,7 @@ break;
 //mp->get_metadata(NULL);
 //cout <<"------------- Meta Data -------------"<<endl;
 
-cout <<"Video Native Pixel Format:"<<mp->get_pixelformat()<<endl;
+//cout <<"Video Native Pixel Format:"<<mp->get_pixelformat()<<endl;
 int options = SDL_ANYFORMAT | SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_ASYNCBLIT | SDL_HWACCEL;
 SDL_WM_SetCaption( "Experiemental Player", NULL );
 screen = SDL_SetVideoMode(mp->width, mp->height, 32, options);

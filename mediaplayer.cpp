@@ -1,29 +1,30 @@
 #include "mediaplayer.h"
 
 
-int mediaplayer::findandopencodec(AVCodecContext *pCodecCtx){
-  
- AVCodec *pCodec;
-pCodec=avcodec_find_decoder(pCodecCtx->codec_id);
-cout <<"Codec:"<<pCodec->name<<endl;
+int mediaplayer::findandopencodec(AVCodecContext *pCodecCtx , int stream_index){
 
-if(pCodec==NULL) {
+
+ AVCodec *codec;
+codec=avcodec_find_decoder(pCodecCtx->codec_id);
+cout <<"Codec:"<<codec->name<<endl;
+if(codec==NULL) {
 cout <<"Error Unsupported Codec..."<<endl;
    // sc->status = MP_ERROR;
    put_status(MP_ERROR,sc); 
   return -1; 
 }
 
-
-
-
-if(avcodec_open2(pCodecCtx, pCodec,NULL)<0){
-cout <<"Error Could not Open Codec..."<<endl;
-  //sc->status = MP_ERROR;
-  put_status(MP_ERROR,sc);
- return -1; 
+int ret;
+pthread_mutex_lock(&sc->codec_open_lock);
+ret = avcodec_open2(pCodecCtx, codec,NULL);
+pthread_mutex_unlock(&sc->codec_open_lock); 
+if(ret < 0){
+  cout <<"Error Opening Codec..."<<endl;
+ put_status(MP_ERROR,sc); 
+  return -1;   
 }
- 
+
+//sleep(1);
 cout <<"Codec Opened..."<<endl; 
 return 0;  
 }
@@ -56,7 +57,6 @@ if(strcmp(protocol,"http") == 0 || strcmp(protocol,"https") == 0 || strcmp(proto
 
 
 int mediaplayer::loadfile(char *url,stream_context *streamcontext){
-//sc->pFormatCtx = avformat_alloc_context();
 stream_context *sc = streamcontext;
 AVInputFormat *format = NULL;
 //AVProbeData pd;
@@ -191,12 +191,14 @@ if(format == NULL)
   cout <<"Nothing Found..."<<endl;
 //cout <<format->name<<endl;
 
+
 if(avformat_find_stream_info(sc->pFormatCtx,NULL)<0){
  cout <<"Error Returning File Info..."<<endl;
   //sc->status = MP_ERROR;  
 put_status(MP_ERROR,sc);
 return -1; 
 }
+
 
 format = sc->pFormatCtx->iformat;
 cout <<" - "<<format->name<<" - "<<endl;
@@ -220,15 +222,20 @@ cout <<"No of Streams:"<<sc->pFormatCtx->nb_streams<<endl;
 for(i=0; i<sc->pFormatCtx->nb_streams; i++){
   switch(sc->pFormatCtx->streams[i]->codec->codec_type){
 case AVMEDIA_TYPE_VIDEO:
-if(vs == 0)
+if(vs == 0){
 sc->videostream=i;
+sc->videoctx = sc->pFormatCtx->streams[i]->codec;//avcodec_alloc_context3(NULL);  
+findandopencodec(sc->videoctx,i);//sc->pFormatCtx->streams[i]->codec);
+}
 
 vs = vs + 1;
 break;
 case AVMEDIA_TYPE_AUDIO:
-if(as == 0)
+if(as == 0){
 sc->audiostream=i;
-
+sc->audioctx = sc->pFormatCtx->streams[i]->codec;
+findandopencodec(sc->audioctx,i);
+}
 as = as + 1;
 break;
   }
@@ -236,16 +243,26 @@ break;
 }
 
 
-cout <<"Total No of Audio Stream:"<<as<<" - Total No of Video Stream:"<<vs<<endl;
+//AVCodec *video_codec = NULL;
+//AVCodec *audio_codec = NULL;
+//sc->videostream = av_find_best_stream(sc->pFormatCtx,AVMEDIA_TYPE_VIDEO,-1,-1,&video_codec,0);
+//sc->audiostream = av_find_best_stream(sc->pFormatCtx,AVMEDIA_TYPE_AUDIO,-1,-1,&audio_codec,0);
+
+
+ cout <<"Total No of Audio Stream:"<<as<<" - Total No of Video Stream:"<<vs<<endl;
 if(sc->videostream<0){
  cout <<"No Video Stream Found..."<<endl; 
  }else{
- cout <<"Video Stream Found"<<endl; 
-//..............
-sc->videoctx = sc->pFormatCtx->streams[sc->videostream]->codec;
-//..............
+ cout <<"Video Stream Found"<<endl;
 
+//sc->videoctx = avcodec_alloc_context3(NULL);
+//sc->videoctx->height = sc->pFormatCtx->streams[sc->videostream]->codec->height; 
+//sc->videoctx->width = sc->pFormatCtx->streams[sc->videostream]->codec->width;
 
+//..............
+//sc->videoctx = sc->pFormatCtx->streams[sc->videostream]->codec;
+//..............
+//findandopencodec(sc->videoctx);
 
 
 
@@ -254,27 +271,40 @@ sc->videoctx = sc->pFormatCtx->streams[sc->videostream]->codec;
 
 cout <<"video time base:"<<av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base)<<endl;
 sc->videobasetime = av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base);
-findandopencodec(sc->videoctx);
-height = sc->videoctx->height;
-width = sc->videoctx->width;
-sc->pixelformat = sc->videoctx->pix_fmt;
+
+/*
+ AVCodec *pCodec;
+pCodec=avcodec_find_decoder(sc->pFormatCtx->streams[sc->videostream]->codec->codec_id);
+cout <<"Codec:"<<pCodec->name<<endl;
+cout <<"bpp:"<<sc->videoctx->bits_per_coded_sample<<endl; 
+avcodec_open2(sc->videoctx, pCodec,NULL);
+*/
+
+height = sc->pFormatCtx->streams[sc->videostream]->codec->height;
+width = sc->pFormatCtx->streams[sc->videostream]->codec->width;
+sc->pixelformat = sc->pFormatCtx->streams[sc->videostream]->codec->pix_fmt;
 }
 
 if(sc->audiostream<0){
  cout <<"No Audio Stream Found..."<<endl; 
  }else{
  cout <<"Audio Stream Found"<<endl; 
-sc->audioctx = sc->pFormatCtx->streams[sc->audiostream]->codec; 
+
+//sc->audioctx = avcodec_alloc_context3(NULL);
+//sc->audioctx = sc->pFormatCtx->streams[sc->audiostream]->codec; 
+//findandopencodec(sc->audioctx);
+
 //audiobasetime = (double)pFormatCtx->streams[audiostream]->time_base.num / (double)pFormatCtx->streams[audiostream]->time_base.den;
 sc->audiobasetime = av_q2d(sc->pFormatCtx->streams[sc->audiostream]->time_base);
 cout <<"audio time base:"<<av_q2d(sc->pFormatCtx->streams[sc->audiostream]->time_base)<<endl;
 
-findandopencodec(sc->audioctx);
 channels = sc->audioctx->channels;
 samplerate = sc->audioctx->sample_rate;
 //sc->sampleformat = sc->audioctx->sample_fmt;
 
 }
+
+
 
 ///////////////////////////////////////////////////////////////////
 
@@ -383,8 +413,8 @@ sc->is_seekable = 1;
 }
 }
 cout <<"Start Time:"<<sc->start_time<<endl;
-cout <<"Video Codec:"<<sc->videoctx->codec_name<<endl;
-//cout <<"File Size:"<<avio_size (sc->pFormatCtx->pb)<<endl;
+//cout <<"Video Codec:"<<sc->videoctx->codec_name<<endl;
+cout <<"File Size:"<<avio_size (sc->pFormatCtx->pb)<<endl;
 /*
 if(sc->pFormatCtx->streams[sc->audiostream]->disposition ==  AV_DISPOSITION_ATTACHED_PIC){
   cout <<"Attached Image Found..."<<endl;
@@ -431,17 +461,26 @@ md = md->next;
 mediaplayer::mediaplayer(char *file){
 
 //cout <<avdevice_configuration ()<<endl;
-av_register_all(); 
+
 avcodec_register_all();
 avdevice_register_all();
 avformat_network_init(); 
+av_register_all(); 
+
+
+
 
 sc = new stream_context();
 ///////////////////////////////////////////////
+sc->pFormatCtx = avformat_alloc_context();
+
+//sc->audioctx = avcodec_alloc_context3(NULL);
+//sc->videoctx = avcodec_alloc_context3(NULL);
+
 sc->masterclock = new media_clock(); 
 sc->aout = new audio();
 sc->vout = new video();
-sc->vout1 = new video();
+//sc->vout1 = new video();
 
 //is_network_stream = 0;
 sc->networkstream = 0;
@@ -494,7 +533,10 @@ if(ret < 0){
 }
 
 void mediaplayer::set_pixelformat(char *fourcc_code){
-sc->cc = new colorspace_converter(height,width,get_pixelformat(),fourcc_code);
+//sc->cc = new colorspace_converter(height,width,get_pixelformat(),fourcc_code);
+
+sc->pixel_format = fourcc_code;
+
 }
 
 
@@ -794,17 +836,17 @@ pthread_mutex_unlock(&sc->status_lock);
 }
 
 
-char * mediaplayer::get_pixelformat(){
- return get_fourcc_code(sc->pixelformat);
-}
+//char * mediaplayer::get_pixelformat(){
+// return get_fourcc_code(sc->pixelformat);
+//}
 
 mediaplayer::~mediaplayer(){
 delete(sc->masterclock);
 
 delete(sc->aout);
 delete(sc->vout);
-delete(sc->vout1);
-delete(sc->cc);
+//delete(sc->vout1);
+//delete(sc->cc);
 //av_free(sc->vidframe);
 avcodec_close(sc->videoctx);
 avcodec_close(sc->audioctx);

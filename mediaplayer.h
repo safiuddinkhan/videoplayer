@@ -68,45 +68,46 @@ pthread_t demuxerthread;
 pthread_t audioplaybackthread;
 
 
-pthread_mutex_t audiolock;
-pthread_mutex_t videolock;
+pthread_mutex_t audiolock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t videolock = PTHREAD_MUTEX_INITIALIZER;
 //pthread_mutex_t seeklock;
 
 
-pthread_mutex_t demuxlock;
+pthread_mutex_t demuxlock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t demuxcond;
 
 
-pthread_mutex_t decodelock;
+pthread_mutex_t decodelock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t decodecond;
 
-pthread_mutex_t decodelock1;
+pthread_mutex_t decodelock1 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t decodecond1;
 
-pthread_mutex_t waitlock;
+pthread_mutex_t waitlock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t audio_waitcond;
 pthread_cond_t video_waitcond;
 pthread_cond_t demux_waitcond;
 
 
-pthread_mutex_t pauselock;
+pthread_mutex_t pauselock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t pausecond;
 
-pthread_mutex_t videoframelock;
-pthread_mutex_t videodatalock;
+pthread_mutex_t videoframelock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t videodatalock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t videoframeupdate;
 
-pthread_mutex_t audioframelock;
-pthread_mutex_t audiodatalock;
+pthread_mutex_t audioframelock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t audiodatalock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t audioframeupdate;
 
+pthread_mutex_t codec_open_lock = PTHREAD_MUTEX_INITIALIZER;
 
-pthread_mutex_t end_status_lock1;
-pthread_mutex_t end_status_lock2;
-pthread_mutex_t end_thread_lock;
-pthread_mutex_t status_lock;
-pthread_mutex_t video_seek_status_lock;
-pthread_mutex_t audio_seek_status_lock;
+pthread_mutex_t end_status_lock1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t end_status_lock2 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t end_thread_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t status_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t video_seek_status_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t audio_seek_status_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int seek;
 //int audioseek;
@@ -129,11 +130,11 @@ int is_seekable;
 //int audiopacketsize;
 audio *aout;
 video *vout;
-video *vout1;
+//video *vout1;
 
 AVPixelFormat pixelformat;
 //AVFrame *vidframe;
-colorspace_converter *cc;
+//colorspace_converter *cc;
 SDL_Surface *screen;
 
 int videoseek;
@@ -152,6 +153,7 @@ meta_data *mdata_init;
 meta_data *mdata;
 meta_data *mdata_curr;
 
+char *pixel_format;
 
 
 };
@@ -171,7 +173,7 @@ static void *audioplayback(void *arg);
 static void *videoplayback(void *arg);
 static void *demuxer(void *arg);
 
-int findandopencodec(AVCodecContext *pCodecCtx);
+int findandopencodec(AVCodecContext *pCodecCtx, int stream_index);
 int loadfile(char *url,stream_context *streamcontext);
 stream_type stream_detector(char *url);
 
@@ -198,7 +200,7 @@ int pause();
 void seek(double timestamp);
 double getpos();
 double getduration();
-char * get_pixelformat();
+//char * get_pixelformat();
 mediaplayer_status getstatus();
 void get_metadata(char *key,char *value,int flag);
 ~mediaplayer();

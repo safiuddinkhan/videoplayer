@@ -15,6 +15,7 @@ char * get_fourcc_code(AVPixelFormat pix_fmt)
         }
     }
 
+return NULL;
 
 }
 

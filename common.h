@@ -1,5 +1,6 @@
 #include "fourcc.h"
-#include "colorspace_converter.h"
+#include "av_struct.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
