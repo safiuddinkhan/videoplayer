@@ -610,6 +610,7 @@ sc->stop = 0;
 put_status(MP_PLAYING,sc);
 
 
+if(sc->is_seekable){
 // Rewind Video to Start
 int ret = av_seek_frame(sc->pFormatCtx, -1, sc->pFormatCtx->start_time , AVSEEK_FLAG_BACKWARD);
 if(ret < 0){
@@ -620,12 +621,10 @@ if(sc->videostream != -1)
 avcodec_flush_buffers(sc->videoctx);
 if(sc->audiostream != -1)
 avcodec_flush_buffers(sc->audioctx);
-empty_buffers(sc);
+}
 }
 
 
-
-//av_read_play(sc->pFormatCtx);
   pthread_create(&sc->demuxerthread,NULL,demuxer,sc);
 
 if(sc->videostream != -1)
@@ -679,7 +678,7 @@ pthread_join(sc->videothread,&exit);
 //sc->status = MP_STOP;
 put_status(MP_STOP,sc);
 cout <<"Media Stopped"<<endl;
-
+ // sc->stop = 0;
 
 //avcodec_close(sc->videoctx);
 //avcodec_close(sc->audioctx);

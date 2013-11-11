@@ -129,6 +129,7 @@ AVFrame *vidframe1;
 int height;
 int width;
 SwsContext * convert_ctx;
+cout <<"Crash here.."<<endl;
 
 AVPixelFormat dstfmt = get_avpixelformat(sc->pixel_format);
 if(dstfmt == AV_PIX_FMT_NONE){
@@ -154,6 +155,22 @@ convert_ctx = sws_getContext(width, height, sc->videoctx->pix_fmt,
 
 
 ////////////////////////////////////////////////////////////////
+SDL_LockYUVOverlay(surf);
+
+vidframe1->data[0] = surf->pixels[0];
+vidframe1->data[1] = surf->pixels[2];
+vidframe1->data[2] = surf->pixels[1];
+
+vidframe1->linesize[0] = surf->pitches[0];
+vidframe1->linesize[1] = surf->pitches[2];
+vidframe1->linesize[2] = surf->pitches[1];
+
+
+SDL_UnlockYUVOverlay(surf);
+////////////////////////////////////////////////////////////////
+
+
+
 while(true){
 
 videopause:
@@ -180,6 +197,7 @@ break;
 }else if(ret == -2){
 goto videopause;
 }else if(ret == 0){
+sws_scale(convert_ctx,vidframe->data,vidframe->linesize,0,height,vidframe1->data,vidframe1->linesize);
 
 cout <<"Hello..."<<endl;
 sc->videopts = (double)av_frame_get_best_effort_timestamp(vidframe) * (double)sc->videobasetime;
@@ -258,32 +276,8 @@ sc->vout = sc->cc->convert(sc->vout1);
 */
 
 
-sws_scale(convert_ctx,vidframe->data,vidframe->linesize,0,height,vidframe1->data,vidframe1->linesize);
 
 
-SDL_LockYUVOverlay(surf);
-
-
-//memcpy(surf->pixels[1],sc->vout->data[2],(sc->videoctx->height * surf->pitches[1]));
-
-//   memcpy(data,out->data[0], out->linesize[0]*mp->height);
-//   memcpy(data+(out->linesize[0]*mp->height),out->data[1], out->linesize[1]*mp->height);
-
-//sc->vout->data[0] = surf->pixels[0];
-//sc->vout->data[1] = surf->pixels[2];
-//sc->vout->data[2] = surf->pixels[1];
-
-memcpy(surf->pixels[0],vidframe1->data[0],(sc->videoctx->height * sc->videoctx->width));
-memcpy(surf->pixels[1],vidframe1->data[2],(sc->videoctx->height * sc->videoctx->width)/4);
-memcpy(surf->pixels[2],vidframe1->data[1],(sc->videoctx->height * sc->videoctx->width)/4);
-
-
-vidframe1->linesize[0] = surf->pitches[0];
-vidframe1->linesize[1] = surf->pitches[2];
-vidframe1->linesize[2] = surf->pitches[1];
-
-
-SDL_UnlockYUVOverlay(surf);
 SDL_DisplayYUVOverlay(surf, &rect);
 
 pthread_mutex_lock(&sc->video_seek_status_lock);

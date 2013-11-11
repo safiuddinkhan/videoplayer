@@ -7,7 +7,8 @@ AVPacket packet;
 if(sc->videostream != -1){
 while(true){
 
-if(sc->videobuffer.size() == 0)
+
+if(sc->videobuffer.size() == 0 || sc->videobuffer.empty())
 break;
 //usleep(300);
 pthread_mutex_lock(&sc->videolock);
@@ -22,7 +23,7 @@ if(sc->audiostream != -1){
 
 while(true){
 
-  if(sc->audiobuffer.size() == 0)
+  if(sc->audiobuffer.size() == 0 || sc->audiobuffer.empty())
     break;
 //usleep(300);
   pthread_mutex_lock(&sc->audiolock);
@@ -470,6 +471,11 @@ int max_videobuffer = 30;
 int max_audiobuffer = 30;
 int ret;
  //ret = av_read_frame(sc->pFormatCtx, &packet);
+empty_buffers(sc);
+
+av_read_play(sc->pFormatCtx);
+  
+
 while(true){
 
 /*
@@ -560,6 +566,7 @@ pthread_cond_broadcast(&sc->decodecond);
 
 if(fc == 0){
 if((sc->audiobuffer.size() < 10 || sc->videobuffer.size() < 10)){
+fc = 1;
 cout <<"---------------------"<<endl; 
 cout <<"Buffer Low...."<<endl;
 cout <<"---------------------"<<endl; 
@@ -573,6 +580,8 @@ sc->masterclock->settime(sc->masterclock->gettime());
 pthread_mutex_lock(&sc->pauselock);
 sc->pausetoggle = 1;
 pthread_mutex_unlock(&sc->pauselock);
+
+
 
 //////////////////////////////////////////////
 
@@ -623,7 +632,6 @@ if(sc->stop == 1){
 
 cout <<sc->audiopause<<" - "<<sc->videopause<<endl;
 //////////////////////////////////////////////
-fc = 1;
 pause_over = 1;
 }
 }
