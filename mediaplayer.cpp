@@ -14,6 +14,8 @@ cout <<"Error Unsupported Codec..."<<endl;
   return -1; 
 }
 
+//avcodec_get_context_defaults3(pCodecCtx,codec);  
+
 int ret;
 pthread_mutex_lock(&sc->codec_open_lock);
 ret = avcodec_open2(pCodecCtx, codec,NULL);
@@ -224,8 +226,33 @@ for(i=0; i<sc->pFormatCtx->nb_streams; i++){
 case AVMEDIA_TYPE_VIDEO:
 if(vs == 0){
 sc->videostream=i;
-sc->videoctx = sc->pFormatCtx->streams[i]->codec;//avcodec_alloc_context3(NULL);  
-findandopencodec(sc->videoctx,i);//sc->pFormatCtx->streams[i]->codec);
+
+
+
+
+
+AVCodec *pCodec;
+pCodec=avcodec_find_decoder(sc->pFormatCtx->streams[sc->videostream]->codec->codec_id);
+//// work around to display png images 
+if(strcmp(pCodec->name,"png") == 0){
+
+sc->videoctx = avcodec_alloc_context3(NULL);
+sc->videoctx->height = sc->pFormatCtx->streams[sc->videostream]->codec->height; 
+sc->videoctx->width = sc->pFormatCtx->streams[sc->videostream]->codec->width;
+sc->videoctx->pix_fmt = sc->pFormatCtx->streams[sc->videostream]->codec->pix_fmt;
+cout <<"Codec:"<<pCodec->name<<endl;
+cout <<"bpp:"<<sc->videoctx->bits_per_coded_sample<<endl; 
+avcodec_open2(sc->videoctx, pCodec,NULL);
+
+}else{
+//// If no png then open codec normally 
+sc->videoctx = sc->pFormatCtx->streams[i]->codec; 
+findandopencodec(sc->videoctx,i);
+}
+
+sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
+
+
 }
 
 vs = vs + 1;
@@ -235,6 +262,7 @@ if(as == 0){
 sc->audiostream=i;
 sc->audioctx = sc->pFormatCtx->streams[i]->codec;
 findandopencodec(sc->audioctx,i);
+sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
 }
 as = as + 1;
 break;
@@ -397,6 +425,8 @@ sc->videoctx->hwaccel_context = hwaccel;
 
 */
 ///////////////////////// Video Acceleration /////////////////////////
+
+
 
 sc->start_time = (double)(sc->pFormatCtx->start_time / AV_TIME_BASE);
 

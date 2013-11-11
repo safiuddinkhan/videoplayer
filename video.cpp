@@ -23,11 +23,12 @@ pthread_cond_broadcast(&sc->demuxcond);
   return -1;
 }
 
-
+/*
 if(sc->endthread == 1){
   cout <<" Video Decoding Ended..."<<endl;
 return -1;
 }
+*/
 
 //pthread_mutex_lock(&sc->videolock);
 if(sc->videobuffer.size() == 0){
@@ -129,7 +130,6 @@ AVFrame *vidframe1;
 int height;
 int width;
 SwsContext * convert_ctx;
-cout <<"Crash here.."<<endl;
 
 AVPixelFormat dstfmt = get_avpixelformat(sc->pixel_format);
 if(dstfmt == AV_PIX_FMT_NONE){
