@@ -472,9 +472,15 @@ int max_audiobuffer = 30;
 int ret;
  //ret = av_read_frame(sc->pFormatCtx, &packet);
 empty_buffers(sc);
+if(sc->videostream != -1)
+avcodec_flush_buffers(sc->videoctx);
+if(sc->audiostream != -1)
+avcodec_flush_buffers(sc->audioctx);
+
+
 
 av_read_play(sc->pFormatCtx);
-  
+
 
 while(true){
 

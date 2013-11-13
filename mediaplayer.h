@@ -7,7 +7,7 @@
 
 
 using namespace std;
-
+using namespace TagLib::ID3v2;
 
 
 enum stream_type{
@@ -35,6 +35,9 @@ meta_data *next;
 };
 
 
+
+
+
 void init_all();
 
 
@@ -45,6 +48,7 @@ AVCodecContext *videoctx;
 AVCodecContext *audioctx;
 int audiostream;
 int videostream;
+int attachedimage;
 std::queue <AVPacket> audiobuffer;
 std::queue <AVPacket> videobuffer;
 double videobasetime;

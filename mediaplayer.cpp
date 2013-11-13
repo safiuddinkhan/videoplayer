@@ -1,6 +1,5 @@
 #include "mediaplayer.h"
 
-
 int mediaplayer::findandopencodec(AVCodecContext *pCodecCtx , int stream_index){
 
 
@@ -61,11 +60,8 @@ if(strcmp(protocol,"http") == 0 || strcmp(protocol,"https") == 0 || strcmp(proto
 int mediaplayer::loadfile(char *url,stream_context *streamcontext){
 stream_context *sc = streamcontext;
 AVInputFormat *format = NULL;
-//AVProbeData pd;
-//pd.filename = url;
-//format = av_find_input_format("v4l2");
-//if(format == NULL)
-//cout <<"Nothing Found..."<<endl;
+
+
 
 /////////// Detecting URL
 stream_type st = stream_detector(url);
@@ -141,16 +137,21 @@ if(avformat_open_input(&sc->pFormatCtx, url, format, &options)!=0){
   return -1; 
 }
 
+
+//////////////////////////////////////////////////////////////////////////
+
+
 if(st == stream_none)
 sc->streamtype = stream_localfile;
 
-//AVDictionaryEntry *tag = NULL;
+AVDictionaryEntry *tag = NULL;
 
-//int key_len = 0;
-//int val_len = 0;
+int key_len = 0;
+int val_len = 0;
 
-/*
+
 while ((tag = av_dict_get(sc->pFormatCtx->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))){
+/*
 sc->mdata = new meta_data();
 
 if(sc->mdata_curr == NULL){
@@ -170,12 +171,13 @@ memcpy(sc->mdata->value,tag->value,val_len);
 
 sc->mdata->next = NULL;
 sc->mdata_curr = sc->mdata;
-
-
-printf("%s=%s\n", sc->mdata->key, sc->mdata->value);
-
-}
 */
+
+//printf("%s=%s\n", sc->mdata->key, sc->mdata->value);
+
+cout <<tag->key<<" - "<<tag->value<<endl;
+}
+
 
 
 //int count = av_dict_count(options);
@@ -189,8 +191,8 @@ if(sc->networkstream){
   //sc->pFormatCtx->probesize = 50*1024*1024;
   //sc->pFormatCtx->max_analyze_duration = 10*60*AV_TIME_BASE;
 
-if(format == NULL)
-  cout <<"Nothing Found..."<<endl;
+//if(format == NULL)
+//  cout <<"Nothing Found..."<<endl;
 //cout <<format->name<<endl;
 
 
@@ -226,11 +228,6 @@ for(i=0; i<sc->pFormatCtx->nb_streams; i++){
 case AVMEDIA_TYPE_VIDEO:
 if(vs == 0){
 sc->videostream=i;
-
-
-
-
-
 AVCodec *pCodec;
 pCodec=avcodec_find_decoder(sc->pFormatCtx->streams[sc->videostream]->codec->codec_id);
 //// work around to display png images 
@@ -270,43 +267,14 @@ break;
     
 }
 
-
-//AVCodec *video_codec = NULL;
-//AVCodec *audio_codec = NULL;
-//sc->videostream = av_find_best_stream(sc->pFormatCtx,AVMEDIA_TYPE_VIDEO,-1,-1,&video_codec,0);
-//sc->audiostream = av_find_best_stream(sc->pFormatCtx,AVMEDIA_TYPE_AUDIO,-1,-1,&audio_codec,0);
-
-
  cout <<"Total No of Audio Stream:"<<as<<" - Total No of Video Stream:"<<vs<<endl;
 if(sc->videostream<0){
  cout <<"No Video Stream Found..."<<endl; 
  }else{
  cout <<"Video Stream Found"<<endl;
 
-//sc->videoctx = avcodec_alloc_context3(NULL);
-//sc->videoctx->height = sc->pFormatCtx->streams[sc->videostream]->codec->height; 
-//sc->videoctx->width = sc->pFormatCtx->streams[sc->videostream]->codec->width;
-
-//..............
-//sc->videoctx = sc->pFormatCtx->streams[sc->videostream]->codec;
-//..............
-//findandopencodec(sc->videoctx);
-
-
-
-//cout <<"Height:"<<dctx.videoctx->height<<" - Width:"<<dctx.videoctx->width<<endl;
-//videobasetime = (double)pFormatCtx->streams[videostream]->time_base.num / (double)pFormatCtx->streams[videostream]->time_base.den;
-
 cout <<"video time base:"<<av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base)<<endl;
 sc->videobasetime = av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base);
-
-/*
- AVCodec *pCodec;
-pCodec=avcodec_find_decoder(sc->pFormatCtx->streams[sc->videostream]->codec->codec_id);
-cout <<"Codec:"<<pCodec->name<<endl;
-cout <<"bpp:"<<sc->videoctx->bits_per_coded_sample<<endl; 
-avcodec_open2(sc->videoctx, pCodec,NULL);
-*/
 
 height = sc->pFormatCtx->streams[sc->videostream]->codec->height;
 width = sc->pFormatCtx->streams[sc->videostream]->codec->width;
@@ -318,11 +286,6 @@ if(sc->audiostream<0){
  }else{
  cout <<"Audio Stream Found"<<endl; 
 
-//sc->audioctx = avcodec_alloc_context3(NULL);
-//sc->audioctx = sc->pFormatCtx->streams[sc->audiostream]->codec; 
-//findandopencodec(sc->audioctx);
-
-//audiobasetime = (double)pFormatCtx->streams[audiostream]->time_base.num / (double)pFormatCtx->streams[audiostream]->time_base.den;
 sc->audiobasetime = av_q2d(sc->pFormatCtx->streams[sc->audiostream]->time_base);
 cout <<"audio time base:"<<av_q2d(sc->pFormatCtx->streams[sc->audiostream]->time_base)<<endl;
 
@@ -334,66 +297,98 @@ samplerate = sc->audioctx->sample_rate;
 
 
 
-///////////////////////////////////////////////////////////////////
 
+//////////////////////////////////////////////////////////////////////////
+/// If attached image of mp3 is not detected by ffmpeg then we use taglib to extract the attached image
 
-/*
-for(i=0; i<sc->pFormatCtx->nb_streams; i++){
-  if(sc->pFormatCtx->streams[i]->codec->codec_type==AVMEDIA_TYPE_VIDEO ) {
-    sc->videostream=i;
-    break;
+if(strcmp(format->name,"mp3") == 0 && sc->videostream == -1){
+
+ TagLib::MPEG::File mp3File(url);
+    Tag * mp3Tag;
+    FrameList listOfMp3Frames;
+    AttachedPictureFrame * pictureFrame;
+AVPacket packet;
+//av_init_packet(&packet);
+
+    mp3Tag= mp3File.ID3v2Tag();
+    if(mp3Tag)
+    {
+        listOfMp3Frames = mp3Tag->frameListMap()["APIC"];
+        if(!listOfMp3Frames.isEmpty())
+        {
+            FrameList::ConstIterator it= listOfMp3Frames.begin();
+         //   for(; it != listOfMp3Frames.end() ; it++)
+         //   {
+pictureFrame = static_cast<AttachedPictureFrame *> (*it);
+//cout <<"mime-type:"<<pictureFrame->mimeType()<<endl;
+AVCodec *codec;
+
+const char *mime_attached = pictureFrame->mimeType().toCString(false);
+const CodecMime *mime = ff_id3v2_mime_tags;
+ enum AVCodecID id = AV_CODEC_ID_NONE;
+ while (mime->id != AV_CODEC_ID_NONE) {
+  if (!av_strncasecmp(mime->str, mime_attached, sizeof(mime_attached))) {
+ // id = mime->id;
+codec = avcodec_find_decoder(mime->id);
+cout <<"mime-type:"<<mime->str<<endl;
+  break;
   }
-}
-
-if(sc->videostream<0){
- cout <<"No Video Stream Found..."<<endl; 
- }else{
- cout <<"Video Stream Found"<<endl; 
-//..............
-sc->videoctx = sc->pFormatCtx->streams[sc->videostream]->codec;
-//..............
-findandopencodec(sc->videoctx);
-
-
-
-
-//cout <<"Height:"<<dctx.videoctx->height<<" - Width:"<<dctx.videoctx->width<<endl;
-//videobasetime = (double)pFormatCtx->streams[videostream]->time_base.num / (double)pFormatCtx->streams[videostream]->time_base.den;
-
-cout <<"video time base:"<<av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base)<<endl;
-sc->videobasetime = av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base);
-height = sc->videoctx->height;
-width = sc->videoctx->width;
-sc->pixelformat = sc->videoctx->pix_fmt;
-}
-
-
-for(i=0; i<sc->pFormatCtx->nb_streams; i++){
-  if(sc->pFormatCtx->streams[i]->codec->codec_type==AVMEDIA_TYPE_AUDIO ) {
-    sc->audiostream=i;
-    break;
+  mime++;
   }
+
+
+av_new_packet (&packet, pictureFrame->picture().size());
+memcpy(packet.data,pictureFrame->picture().data(),pictureFrame->picture().size());
+    // packet.data = (uint8_t*)pictureFrame->picture().data();
+     packet.size = pictureFrame->picture().size();
+     packet.flags = AV_PKT_FLAG_KEY;
+
+pthread_mutex_lock(&sc->videolock);
+sc->videobuffer.push(packet);
+pthread_mutex_unlock(&sc->videolock);
+
+
+sc->videoctx = avcodec_alloc_context3(NULL);
+
+avcodec_open2(sc->videoctx,codec, NULL);
+sc->attachedimage = 1;
+AVFrame *frame = avcodec_alloc_frame();
+int decode_ok;
+
+int len;
+while(true){
+  len = avcodec_decode_video2(sc->videoctx, frame, &decode_ok, &packet);
+if(decode_ok || len < 0){
+break;
+}
 }
 
+if(len < 0){
+  cout <<"Error Parsing Attached Image"<<endl;
+sc->videoctx->width = 0;
+sc->videoctx->height = 0;
+height = 0;
+width = 0;
+}else{
+cout <<frame->height<<" - "<<frame->width<<endl;
+sc->videoctx->width = frame->width;
+sc->videoctx->height = frame->height;
+height = frame->height;
+width = frame->width;
+}
 
+//break;
+          //  }
+} else{
+cout <<"No Attached Image Found..."<<endl;          
+}
 
-if(sc->audiostream<0){
- cout <<"No Audio Stream Found..."<<endl; 
- }else{
- cout <<"Audio Stream Found"<<endl; 
-sc->audioctx = sc->pFormatCtx->streams[sc->audiostream]->codec; 
-//audiobasetime = (double)pFormatCtx->streams[audiostream]->time_base.num / (double)pFormatCtx->streams[audiostream]->time_base.den;
-sc->audiobasetime = av_q2d(sc->pFormatCtx->streams[sc->audiostream]->time_base);
-cout <<"audio time base:"<<av_q2d(sc->pFormatCtx->streams[sc->audiostream]->time_base)<<endl;
-
-findandopencodec(sc->audioctx);
-channels = sc->audioctx->channels;
-samplerate = sc->audioctx->sample_rate;
-//sc->sampleformat = sc->audioctx->sample_fmt;
+} else {
+cout << "Incorrect URL..."<<endl;      
+}
 
 }
-*/
-//////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 
 ///////////////////////// Video Acceleration /////////////////////////
@@ -445,13 +440,8 @@ sc->is_seekable = 1;
 cout <<"Start Time:"<<sc->start_time<<endl;
 //cout <<"Video Codec:"<<sc->videoctx->codec_name<<endl;
 cout <<"File Size:"<<avio_size (sc->pFormatCtx->pb)<<endl;
-/*
-if(sc->pFormatCtx->streams[sc->audiostream]->disposition ==  AV_DISPOSITION_ATTACHED_PIC){
-  cout <<"Attached Image Found..."<<endl;
-}else{
-  cout <<"No Attached Image Found - "<<sc->pFormatCtx->streams[0]->disposition<<endl;
-}
-*/
+
+
 //cout <<"GOP Size:"<<sc->videoctx->gop_size<<endl;
   //  sc->videoctx->skip_top   = lavc_param_skip_top;
   //  sc->videoctx->skip_bottom= lavc_param_skip_bottom;
@@ -503,7 +493,7 @@ av_register_all();
 sc = new stream_context();
 ///////////////////////////////////////////////
 sc->pFormatCtx = avformat_alloc_context();
-
+sc->attachedimage = 0;
 //sc->audioctx = avcodec_alloc_context3(NULL);
 //sc->videoctx = avcodec_alloc_context3(NULL);
 
@@ -645,19 +635,12 @@ if(sc->is_seekable){
 int ret = av_seek_frame(sc->pFormatCtx, -1, sc->pFormatCtx->start_time , AVSEEK_FLAG_BACKWARD);
 if(ret < 0){
 cout <<"Seeking not supported for this video..."<<endl;
-}else{
-/// If Seeking is supported then clear the buffers 
-if(sc->videostream != -1)
-avcodec_flush_buffers(sc->videoctx);
-if(sc->audiostream != -1)
-avcodec_flush_buffers(sc->audioctx);
 }
 }
-
 
   pthread_create(&sc->demuxerthread,NULL,demuxer,sc);
 
-if(sc->videostream != -1)
+if(sc->videostream != -1 || sc->attachedimage == 1)
   pthread_create(&sc->videothread,NULL,videoplayback,sc);  
  
 if(sc->audiostream != -1)
@@ -883,6 +866,19 @@ avformat_close_input(&sc->pFormatCtx);
 }
 
 
+//////////////////////////////////////////////////////////////////
+/// Function Copied From FFMPEG Source Code
+ int av_strncasecmp(const char *a, const char *b, size_t n)
+ {
+  const char *end = a + n;
+  uint8_t c1, c2;
+  do {
+  c1 = av_tolower(*a++);
+  c2 = av_tolower(*b++);
+  } while (a < end && c1 && c1 == c2);
+  return c1 - c2;
+ }
+//////////////////////////////////////////////////////////////////
 
 
 

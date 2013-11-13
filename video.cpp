@@ -111,12 +111,16 @@ avcodec_get_frame_defaults (vidframe);
 
 SDL_Overlay *surf;
 SDL_Rect rect; 
+cout <<"line1"<<endl;
+cout <<sc->videoctx->width<<" - "<<sc->videoctx->height<<endl;
 surf = SDL_CreateYUVOverlay(sc->videoctx->width, sc->videoctx->height, SDL_YV12_OVERLAY, sc->screen);
+cout <<"line2"<<endl;
    rect.x = 0;
    rect.y = 0;
   rect.w = sc->videoctx->width;
   rect.h = sc->videoctx->height;
 ////////////////////////////////////////////////////////////////
+
 double delay;
 int fc=0;
 int ret;
