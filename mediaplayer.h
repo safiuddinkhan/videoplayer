@@ -1,8 +1,5 @@
 
 #include "common.h"
-#include <SDL/SDL.h>
-
-
 
 
 
@@ -28,13 +25,12 @@ MP_ERROR
  };
 
 
-struct meta_data{
+
+
+struct metadata_entry {
 char *key;
 char *value;
-meta_data *next;
 };
-
-
 
 
 
@@ -96,13 +92,12 @@ pthread_cond_t demux_waitcond;
 pthread_mutex_t pauselock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t pausecond;
 
-pthread_mutex_t videoframelock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t videodatalock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t videoframeupdate;
+
 
 pthread_mutex_t audioframelock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t audiodatalock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t audioframeupdate;
+
 
 pthread_mutex_t codec_open_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -139,7 +134,7 @@ video *vout;
 AVPixelFormat pixelformat;
 //AVFrame *vidframe;
 //colorspace_converter *cc;
-SDL_Surface *screen;
+//SDL_Surface *screen;
 
 int videoseek;
 int audioseek;
@@ -152,21 +147,23 @@ int video_flag;
 int audio_flag;
 int end_audiothread;
 int end_videothread;
-
-meta_data *mdata_init;
-meta_data *mdata;
-meta_data *mdata_curr;
-
 char *pixel_format;
+AVDictionaryEntry *tag;
+int videosync;
 
-
+SwsContext * convert_ctx;
+AVFrame *vidframe1;
+uint8_t *vidbuffer;
+void * opaque;
+void (*video_callback)(double , void *);
 };
 
 
 class mediaplayer{
 private:
 
-
+void (*init_video)(uint8_t ** , int * , void *);
+void (*video_callback)(double , void *);
 void audio_pause_callback(int toggle);
 static void put_status(mediaplayer_status status,stream_context *sc);
 static void empty_buffers(stream_context *sc);
@@ -177,7 +174,7 @@ static void *audioplayback(void *arg);
 static void *videoplayback(void *arg);
 static void *demuxer(void *arg);
 
-int findandopencodec(AVCodecContext *pCodecCtx, int stream_index);
+int findandopencodec(AVCodecContext *pCodecCtx);
 int loadfile(char *url,stream_context *streamcontext);
 stream_type stream_detector(char *url);
 
@@ -189,11 +186,12 @@ int width;
 int samplerate;
 int channels;
 stream_type streamtype;
-mediaplayer(char *file);
-void set_pixelformat(char *fourcc_code);
-video *get_playback_videoframe();
+mediaplayer(char *file,char *fourcc_code);
 audio *get_playback_audioframe();
+//virtual void video_callback();
 
+
+void set_videocallback(void  (*init_video)(uint8_t ** , int * , void *) , void (*video_callback)(double , void *),void * opaque);
 
 video *next_videoframe();
 audio *next_audioframe();
@@ -206,7 +204,7 @@ double getpos();
 double getduration();
 //char * get_pixelformat();
 mediaplayer_status getstatus();
-void get_metadata(char *key,char *value,int flag);
+metadata_entry *get_metadata();
 ~mediaplayer();
 };
 

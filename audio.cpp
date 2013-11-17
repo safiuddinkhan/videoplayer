@@ -22,12 +22,6 @@ pthread_cond_broadcast(&sc->demuxcond);
   return -1;
 }
 
-if(sc->endthread == 1){
-  cout <<" Audio Decoding Ended..."<<endl;
- return -1;
-}
-
-
 
 if(sc->audiobuffer.size() == 0){
 
@@ -38,12 +32,12 @@ if(sc->endthread == 1){
  return -1;
 }
 
-  cout << "start..."<<endl;
+ // cout << "start..."<<endl;
 pthread_mutex_lock(&sc->decodelock);
 pthread_cond_wait(&sc->decodecond, &sc->decodelock);
 pthread_mutex_unlock(&sc->decodelock);
 pthread_cond_signal(&sc->demuxcond);
-  cout <<"end..."<<endl;
+ // cout <<"end..."<<endl;
 
 if(sc->stop == 1){
 cout <<"Stop Signal Received by Audio Thread..."<<endl;
@@ -52,10 +46,10 @@ pthread_cond_broadcast(&sc->demuxcond);
 }
 
 
-if(sc->endthread == 1){
-  cout <<" Audio Decoding Ended..."<<endl;
- return -1;
-}
+//if(sc->endthread == 1){
+//  cout <<" Audio Decoding Ended..."<<endl;
+// return -1;
+//}
 
 if(sc->pausetoggle == 1)
 return -2;
@@ -157,11 +151,14 @@ audiopos:
 pthread_mutex_lock(&sc->pauselock);
 if(sc->pausetoggle == 1){ 
 //sc->status = MP_PAUSE;   
+cout <<"Audio Thread Paused..."<<endl;
 sc->audiopause = 1;
 pthread_cond_broadcast(&sc->audio_waitcond);  
 pthread_cond_wait(&sc->pausecond, &sc->pauselock);
 sc->audiopause = 0;
 //sc->status = MP_PLAYING; 
+cout <<"Audio Thread unPaused..."<<endl;
+
 }
 pthread_mutex_unlock(&sc->pauselock);
 
@@ -299,11 +296,19 @@ put_status(MP_PLAYING,sc);
 //
 }
 
+pthread_cond_broadcast(&sc->decodecond1);
+
 pthread_mutex_lock(&sc->end_status_lock1);
 sc->end_audiothread = 1;
 pthread_mutex_unlock(&sc->end_status_lock1);
 
-pthread_cond_broadcast(&sc->decodecond1);
+
+pthread_mutex_lock(&sc->audio_seek_status_lock);
+sc->audioseek = 1;
+pthread_mutex_unlock(&sc->audio_seek_status_lock);
+
+
+
 av_freep(&dst_data); 
 swr_free (&swr_ctx);
 cout <<"audio loop break"<<endl;

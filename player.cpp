@@ -6,11 +6,19 @@
 #include <iostream>
 #include <SDL/SDL.h>
 
+
+int done = 0;
+int height;
+int width;
+
+struct ctx{
 SDL_Surface *screen;
+SDL_Overlay *surf;
+SDL_Rect rect; 
+};
+
 
 using namespace std;
-//pthread_t renderthread;
-//pthread_t audiothread;
 
 /*
 pthread_t test_thread;
@@ -43,109 +51,34 @@ pthread_exit(NULL);
 }
 */
 
-//SDL_Window *win;
-
-//SDL_Surface *screen;
-//SDL_Overlay *surf;
-//SDL_Rect rect; 
-
-//SDL_Surface *videosurf;
-//SDL_Color textColor = { 255, 255, 255 };
-//SDL_Surface *message;
-//TTF_Font *font = NULL;
-int width1;
-int height1;
 
 
+void video_init(uint8_t **data,int *linesize,void * opaque){
+   ctx *c = (ctx *)opaque;
 
-//void * renderscreen(void *arg){
-//uint8_t *data;
-//int linesize;  
-//double *videopts;
-//video *out;
+cout<<" Done..."<<endl;
+SDL_LockYUVOverlay(c->surf);
+data[0] = c->surf->pixels[0];
+data[1] = c->surf->pixels[2];
+data[2] = c->surf->pixels[1];
 
-
-//SDL_Texture *bitmapTex;
-//SDL_Renderer *ren;
- 
-//mediaplayer *mp = (mediaplayer *)arg;
-
-// char *output = new char(100);
-//ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
-//videosurf = SDL_CreateRGBSurface(0, mp->width, mp->height, 32, 0, 0, 0, 0);
-//bitmapTex = SDL_CreateTextureFromSurface(ren, videosurf);
+linesize[0] = c->surf->pitches[0];
+linesize[1] = c->surf->pitches[2];
+linesize[2] = c->surf->pitches[1];
+SDL_UnlockYUVOverlay(c->surf);
+done = 1;
 
 
-//bitmapTex = SDL_CreateTexture(ren,SDL_PIXELFORMAT_IYUV,SDL_TEXTUREACCESS_STREAMING,mp->width,mp->height);
-   
-//int i,j;
-//while(true){
-//out = mp->get_playback_videoframe();
-//cout <<out->linesize[0]<<endl;
-//cout <<mp->get_pixelformat()<<endl;
-//sleep(1);
-//out1 = cc->convert(out);
-//sprintf(output,"Video PTS: %f",out->pts);
-//message = TTF_RenderText_Solid( font, output, textColor );
+}
 
 
-//SDL_LockYUVOverlay(surf);
-//out->data[0] = surf->pixels[0];
-//out->data[1] = surf->pixels[2];
-//out->data[2] = surf->pixels[1];
-//out->linesize[0] = surf->pitches[0];
-//out->linesize[1] = surf->pitches[2];
-//out->linesize[2] = surf->pitches[1];
-//SDL_UnlockYUVOverlay(surf);
-//SDL_DisplayYUVOverlay(surf, &rect);
+void video_callback(double pts,void * opaque){
+  ctx *c = (ctx *)opaque;
 
-//cout <<"Video PTS - "<<out->pts<<" - "<<mp->getstatus()<<endl;
+SDL_DisplayYUVOverlay(c->surf, &c->rect);	
+cout <<pts<<endl;
+}
 
-//SDL_LockSurface(videosurf); 
-//videosurf->pixels = out->data[0]; 
-//videosurf->pitch = out->linesize[0];
-//SDL_UnlockSurface(videosurf); 
-
-//SDL_UpdateTexture(bitmapTex,NULL,out->data[0],out->linesize[0]);
-
-//SDL_LockTexture(bitmapTex,NULL,(void **)&data,&linesize);
-//   memcpy(data,out->data[0], out->linesize[0]*mp->height);
-//   memcpy(data+(out->linesize[0]*mp->height),out->data[1], out->linesize[1]*mp->height);
-//SDL_UnlockTexture(bitmapTex);
-
-//free(out->data);
-//SDL_FreeSurface(videosurf);
-//SDL_RenderClear(ren);
-
-//SDL_RenderCopy(ren, bitmapTex, NULL, NULL);
-//SDL_RenderPresent(ren);
-
-//SDL_FreeSurface(bitmapSurface);
-
-//SDL_BlitSurface(message, &rect, screen, &rect);
-//SDL_BlitSurface(videosurf, NULL, screen, &rect);
-
- //apply_surface( 0, 150, message, screen );
-
-//SDL_Flip(screen);
-//SDL_FreeSurface(message);
-//}
-
-//}
-
-//void * playaudio(void *arg){
-
-//while(true){
-//out = mp->get_playback_audioframe();
-//if(mp->getstatus() == MP_STOP){}else{
-
-//}
-//cout<<"Audio PTS - "<<out->pts<<endl;
-//av_freep(&out.data);
-//}
-
-//pthread_exit(NULL); 
-//} 
 
 
 
@@ -172,8 +105,7 @@ cout <<"Test Player"<<endl;
 
 init_all();
 
-mediaplayer *mp = new mediaplayer(argv[1]);
-mp->set_pixelformat((char *)"YV12");
+mediaplayer *mp = new mediaplayer(argv[1],(char *)"YV12");
 
 /*
 switch(mp->streamtype){
@@ -192,52 +124,70 @@ break;
 }
 */
 
-//cout <<"------------- Meta Data -------------"<<endl;
-//mp->get_metadata(NULL);
-//cout <<"------------- Meta Data -------------"<<endl;
+cout <<"------------- Meta Data -------------"<<endl;
+char *key;
+char *value;
+metadata_entry *entry;
+while(true){
+entry = mp->get_metadata();
+if(entry == NULL)
+break;
+
+cout <<entry->key<<" - "<<entry->value<<endl;
+}
+cout <<"------------- Meta Data -------------"<<endl;
 
 //cout <<"Video Native Pixel Format:"<<mp->get_pixelformat()<<endl;
 int options = SDL_ANYFORMAT | SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_ASYNCBLIT | SDL_HWACCEL;
+
+int totalheight = 768;
+int totalwidth = 1366;
+int x;
+
+
+
+height = mp->height;
+width = mp->width;
+if(width == 0 && height == 0){
+width = 200;
+height = 200;
+}
+
+if(height > totalheight || width > totalwidth){
+
+width = width / 2;
+height = height / 2;
+
+}
+
+
+
+
 SDL_WM_SetCaption( "Experiemental Player", NULL );
-screen = SDL_SetVideoMode(mp->width, mp->height, 32, options);
-mp->sc->screen = screen;
+ctx c;
+
+c.screen = SDL_SetVideoMode(width, height, 32, options);
+cout <<mp->width<<" - "<<mp->height<<endl;
+cout <<width<<" = "<<height<<endl;
+c.surf = SDL_CreateYUVOverlay(mp->width, mp->height, SDL_YV12_OVERLAY, c.screen);
+   c.rect.x = 0;
+   c.rect.y = 0;
+   c.rect.w = width;
+   c.rect.h = height;
+
+mp->set_videocallback(video_init,video_callback,&c);
 
 
 
-
-//int height = mp->height;
-//int width = mp->width;
-
-//int width1 =  mp->width;
-//int height1 = mp->height;
-//if(mp->width > 1366 || mp->height > 768){
-//  width1 = mp->width / 2;
-//  height1 = mp->height / 2;
-//}
-
-//win = SDL_CreateWindow("VIDEOSINK", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, mp->width, mp->height, 0);
-
-//font = TTF_OpenFont( "/home/safi/times.ttf", 20 );
-//if(font == NULL){
-//  cout <<"font not found...."<<endl;
-//}
-
-
-
-
-
-//cout <<get_fourcc_code(mp->get_pixelformat())<<endl;
-//cout <<get_avpixelformat((char *)"BGRA")<<endl;
 
 SDL_Event event;
 
 void *exit;
-//pthread_create(&renderthread,NULL,renderscreen,mp); 
-//pthread_create(&audiothread,NULL,playaudio,mp);
-
 
 //pthread_create(&test_thread,NULL,test_status,mp); 
+
 mp->play();
+
 
  int keypress = 0;
 int fc = 0;
@@ -263,6 +213,21 @@ break;
 case SDL_KEYDOWN:
 keypress = event.key.keysym.sym;
 //cout <<"key press:"<<keypress<<endl;
+if(keypress == 109){
+cout <<"------------- Meta Data -------------"<<endl;
+char *key;
+char *value;
+metadata_entry *entry;
+while(true){
+entry = mp->get_metadata();
+if(entry == NULL)
+break;
+
+cout <<entry->key<<" - "<<entry->value<<endl;
+}
+cout <<"------------- Meta Data -------------"<<endl;	
+}
+
 if(keypress == 27){ 
 return 0;
 }

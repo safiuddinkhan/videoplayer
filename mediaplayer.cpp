@@ -1,6 +1,6 @@
 #include "mediaplayer.h"
 
-int mediaplayer::findandopencodec(AVCodecContext *pCodecCtx , int stream_index){
+int mediaplayer::findandopencodec(AVCodecContext *pCodecCtx){
 
 
  AVCodec *codec;
@@ -137,46 +137,13 @@ if(avformat_open_input(&sc->pFormatCtx, url, format, &options)!=0){
   return -1; 
 }
 
-
+cout <<"media loaded..."<<endl;
 //////////////////////////////////////////////////////////////////////////
 
 
 if(st == stream_none)
 sc->streamtype = stream_localfile;
 
-AVDictionaryEntry *tag = NULL;
-
-int key_len = 0;
-int val_len = 0;
-
-
-while ((tag = av_dict_get(sc->pFormatCtx->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))){
-/*
-sc->mdata = new meta_data();
-
-if(sc->mdata_curr == NULL){
-sc->mdata_init = sc->mdata;
-}else{
-sc->mdata_curr->next = sc->mdata;
-}
-
-
-key_len = strlen(tag->key)+1;
-val_len = strlen(tag->value)+1;
-sc->mdata->key = new char[key_len];
-sc->mdata->value = new char[val_len];
-memcpy(sc->mdata->key,tag->key,key_len);
-memcpy(sc->mdata->value,tag->value,val_len);
-
-
-sc->mdata->next = NULL;
-sc->mdata_curr = sc->mdata;
-*/
-
-//printf("%s=%s\n", sc->mdata->key, sc->mdata->value);
-
-cout <<tag->key<<" - "<<tag->value<<endl;
-}
 
 
 
@@ -185,15 +152,11 @@ cout <<tag->key<<" - "<<tag->value<<endl;
 
 if(sc->networkstream){
   sc->pFormatCtx->probesize = 5*1024*1024;
-  sc->pFormatCtx->max_analyze_duration = 40*60*AV_TIME_BASE;
+  sc->pFormatCtx->max_analyze_duration = 60*AV_TIME_BASE;
 }
 
   //sc->pFormatCtx->probesize = 50*1024*1024;
   //sc->pFormatCtx->max_analyze_duration = 10*60*AV_TIME_BASE;
-
-//if(format == NULL)
-//  cout <<"Nothing Found..."<<endl;
-//cout <<format->name<<endl;
 
 
 if(avformat_find_stream_info(sc->pFormatCtx,NULL)<0){
@@ -202,6 +165,7 @@ if(avformat_find_stream_info(sc->pFormatCtx,NULL)<0){
 put_status(MP_ERROR,sc);
 return -1; 
 }
+
 
 
 format = sc->pFormatCtx->iformat;
@@ -217,8 +181,7 @@ sc->totalduration = sc->pFormatCtx->duration / AV_TIME_BASE;
 ///////////////////////////////////////////////////////////////////
 
 int i;
-sc->videostream =-1;
-sc->audiostream =-1;
+
 
 int vs = 0;
 int as = 0;
@@ -244,7 +207,7 @@ avcodec_open2(sc->videoctx, pCodec,NULL);
 }else{
 //// If no png then open codec normally 
 sc->videoctx = sc->pFormatCtx->streams[i]->codec; 
-findandopencodec(sc->videoctx,i);
+findandopencodec(sc->videoctx);
 }
 
 sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
@@ -258,7 +221,7 @@ case AVMEDIA_TYPE_AUDIO:
 if(as == 0){
 sc->audiostream=i;
 sc->audioctx = sc->pFormatCtx->streams[i]->codec;
-findandopencodec(sc->audioctx,i);
+findandopencodec(sc->audioctx);
 sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
 }
 as = as + 1;
@@ -325,16 +288,16 @@ AVCodec *codec;
 
 const char *mime_attached = pictureFrame->mimeType().toCString(false);
 const CodecMime *mime = ff_id3v2_mime_tags;
- enum AVCodecID id = AV_CODEC_ID_NONE;
+
  while (mime->id != AV_CODEC_ID_NONE) {
   if (!av_strncasecmp(mime->str, mime_attached, sizeof(mime_attached))) {
- // id = mime->id;
 codec = avcodec_find_decoder(mime->id);
 cout <<"mime-type:"<<mime->str<<endl;
   break;
   }
   mime++;
   }
+if(mime->id != AV_CODEC_ID_NONE){
 
 
 av_new_packet (&packet, pictureFrame->picture().size());
@@ -363,20 +326,25 @@ break;
 }
 }
 
+
 if(len < 0){
   cout <<"Error Parsing Attached Image"<<endl;
 sc->videoctx->width = 0;
 sc->videoctx->height = 0;
 height = 0;
 width = 0;
+av_free(frame);
 }else{
 cout <<frame->height<<" - "<<frame->width<<endl;
 sc->videoctx->width = frame->width;
 sc->videoctx->height = frame->height;
 height = frame->height;
 width = frame->width;
+av_free(frame);
 }
-
+}else{
+  cout <<"Error Parsing Attached Image"<<endl;
+}
 //break;
           //  }
 } else{
@@ -386,6 +354,7 @@ cout <<"No Attached Image Found..."<<endl;
 } else {
 cout << "Incorrect URL..."<<endl;      
 }
+
 
 }
 //////////////////////////////////////////////////////////////////////////
@@ -421,16 +390,20 @@ sc->videoctx->hwaccel_context = hwaccel;
 */
 ///////////////////////// Video Acceleration /////////////////////////
 
-
+cout <<"line - 1"<<endl;
 
 sc->start_time = (double)(sc->pFormatCtx->start_time / AV_TIME_BASE);
+
+
 
 // Check if stream/file is seekable 
 if(sc->pFormatCtx->pb != NULL){
 if(sc->pFormatCtx->pb->seekable == 0){  
 sc->is_seekable = 0;
 }else{
-int ret = av_seek_frame(sc->pFormatCtx, -1, sc->pFormatCtx->start_time , AVSEEK_FLAG_BACKWARD);
+
+int ret = av_seek_frame(sc->pFormatCtx, -1, sc->pFormatCtx->start_time , 0);
+
 if(ret < 0)
 sc->is_seekable = 0;
 else  
@@ -464,21 +437,24 @@ audio *mediaplayer::next_audioframe(){
 
 }
 
-void get_metadata(char *key,char *value,int flag){
-/*
-meta_data *md;
-md = sc->mdata_init;
-if(flag == 1){ 
-while(md->next != NULL){
-cout <<md->key<<" = "<<md->value<<endl;
-md = md->next;
+metadata_entry *mediaplayer::get_metadata(){
+
+if(getstatus() == MP_ERROR)
+return NULL;
+
+metadata_entry *entry = new metadata_entry();
+
+sc->tag = av_dict_get(sc->pFormatCtx->metadata, "", sc->tag, AV_DICT_IGNORE_SUFFIX);
+if(sc->tag == NULL){
+return NULL;
 }
-}
-*/
-//return NULL;
+entry->key = sc->tag->key;
+entry->value = sc->tag->value;
+return entry;
+
 }
 
-mediaplayer::mediaplayer(char *file){
+mediaplayer::mediaplayer(char *file,char *fourcc_code){
 
 //cout <<avdevice_configuration ()<<endl;
 
@@ -487,13 +463,16 @@ avdevice_register_all();
 avformat_network_init(); 
 av_register_all(); 
 
-
-
+height = 0;
+width = 0;
 
 sc = new stream_context();
 ///////////////////////////////////////////////
+sc->tag = NULL;
 sc->pFormatCtx = avformat_alloc_context();
 sc->attachedimage = 0;
+sc->videostream =-1;
+sc->audiostream =-1;
 //sc->audioctx = avcodec_alloc_context3(NULL);
 //sc->videoctx = avcodec_alloc_context3(NULL);
 
@@ -526,9 +505,7 @@ pthread_cond_init (&sc->demux_waitcond, NULL);
 
 pthread_cond_init (&sc->decodecond, NULL);
 pthread_cond_init (&sc->decodecond1, NULL);
-pthread_cond_init (&sc->videoframeupdate, NULL);
 pthread_cond_init (&sc->audioframeupdate, NULL);
-
 
 
 
@@ -543,27 +520,117 @@ if(ret < 0){
   //sc->status = MP_ERROR;
   put_status(MP_ERROR,sc);
   streamtype = stream_none;
+}else{
+
+
+if(sc->videostream != -1 || sc->attachedimage == 1){
+////////////////////////////////////////////////////////////////
+sc->pixel_format = fourcc_code;
+
+int numBytes;
+
+
+int height;
+int width;
+
+cout <<"Here.."<<endl;
+AVPixelFormat dstfmt = get_avpixelformat(sc->pixel_format);
+if(dstfmt == AV_PIX_FMT_NONE){
+  dstfmt = AV_PIX_FMT_RGB24;
+  cout <<"Cannot Find your FourCC code falling to RGB24 pixel format"<<endl;
 }
 
 
+cout <<sc->pixel_format<<endl;
 
+sc->vidframe1 = avcodec_alloc_frame();
+height = sc->videoctx->height;
+width = sc->videoctx->width;
+
+////////////////////////////////////////////////////////////////////////
+
+/*
+AVFrame *frame = avcodec_alloc_frame();
+int decode_ok;
+
+int len;
+while(true){
+  len = avcodec_decode_video2(sc->videoctx, frame, &decode_ok, &packet);
+if(decode_ok || len < 0){
+break;
+}
+}
+*/
+
+if(sc->videoctx->pix_fmt == AV_PIX_FMT_NONE){
+cout <<"Pixel Format Not Found..."<<endl; 
+put_status(MP_ERROR,sc); 
+}else{
+////////////////////////////////////////////////////////////////////////
+
+numBytes=avpicture_get_size(dstfmt ,width,height);
+sc->vidbuffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
+avpicture_fill((AVPicture *)sc->vidframe1, sc->vidbuffer, dstfmt ,width, height);
+
+//mm = mp;
+cout <<" ---- "<<sc->videoctx->pix_fmt<<" - "<<sc->videoctx->height<<" - "<<sc->videoctx->width<<endl;
+
+sc->convert_ctx = sws_getContext(width, height, sc->videoctx->pix_fmt,
+                                   width, height,dstfmt,
+                                   SWS_BICUBIC, NULL, NULL, NULL );
+
+
+sc->vout->data = sc->vidframe1->data;
+sc->vout->linesize = sc->vidframe1->linesize; 
+
+}
+////////////////////////////////////////////////////////////////
+}
+
+}
 //sc->vidframe = avcodec_alloc_frame(); 
 //av_read_play(sc->pFormatCtx); 
 
 }
 
-void mediaplayer::set_pixelformat(char *fourcc_code){
-//sc->cc = new colorspace_converter(height,width,get_pixelformat(),fourcc_code);
+void mediaplayer::set_videocallback(void  (*init_video)(uint8_t ** , int * , void *) , void (*video_callback)(double , void *),void * opaque){
+cout <<"---------------------------------------"<<endl;
+switch(getstatus()){
+case MP_PLAYING:
+cout <<"Current Status: Playing..."<<endl;
+break;
+case MP_PAUSE:
+cout <<"Current Status: Pause..."<<endl;
+break;
+case MP_SEEKING:
+cout <<"Current Status: Seek..."<<endl;
+break;
+case MP_ERROR:
+cout <<"Current Status: Error..."<<endl;
+break;
+case MP_STOP:
+cout <<"Current Status: Stop..."<<endl;
+break;
+}
+cout <<"---------------------------------------"<<endl;
 
-sc->pixel_format = fourcc_code;
+cout <<sc->videostream<<" - "<<sc->attachedimage<<endl;
+if((sc->videostream != -1 || sc->attachedimage == 1) && getstatus() != MP_ERROR){
+cout <<"executed.."<<endl;
+sc->video_callback = video_callback;
+sc->opaque = opaque;
+init_video(sc->vidframe1->data,sc->vidframe1->linesize,opaque);
+}
+cout <<"not exexuted..."<<endl;
 
 }
 
-
 int mediaplayer::play(){
-
+if(getstatus() == MP_ERROR)
+return -1;
 
 if(getstatus() == MP_STOP){
+
 cout <<"---------------------------------------"<<endl;
 switch(getstatus()){
 case MP_PLAYING:
@@ -618,6 +685,8 @@ sc->audio_flag = 0;
 
 sc->end_audiothread = 0;
 sc->end_videothread = 0;
+
+
 
 //sc->masterclock->settime(sc->start_time); 
 //sc->masterclock->reset();
@@ -690,7 +759,9 @@ pthread_join(sc->videothread,&exit);
 
 //sc->status = MP_STOP;
 put_status(MP_STOP,sc);
+
 cout <<"Media Stopped"<<endl;
+//pthread_cond_broadcast(&sc->videoframeupdate); 
  // sc->stop = 0;
 
 //avcodec_close(sc->videoctx);
@@ -780,6 +851,17 @@ seek_stream(sc->seektime,sc);
 int j = 0;
 while(true){
 
+if(sc->endthread == 1){
+//break;
+pthread_mutex_lock(&sc->pauselock);
+sc->pausetoggle = 0;
+pthread_mutex_unlock(&sc->pauselock);
+
+pthread_cond_broadcast(&sc->pausecond);
+pthread_cond_broadcast(&sc->decodecond1);
+pthread_cond_broadcast(&sc->decodecond);
+break;
+}
 
 pthread_mutex_lock(&sc->audio_seek_status_lock);
 if(sc->audioseek == 1)
@@ -799,7 +881,7 @@ if(j > 0)
 break;  
 }
 
-cout <<"Wait for all threads to start again after seeking..."<<endl;
+cout <<"Wait for all threads to start again after seeking..."<<j<<endl;
 
 }
 //////////////////////////////////////////////
@@ -854,9 +936,11 @@ pthread_mutex_unlock(&sc->status_lock);
 
 mediaplayer::~mediaplayer(){
 delete(sc->masterclock);
-
+sws_freeContext (sc->convert_ctx);
 delete(sc->aout);
 delete(sc->vout);
+av_free(sc->vidframe1);
+av_freep(&sc->vidbuffer); 
 //delete(sc->vout1);
 //delete(sc->cc);
 //av_free(sc->vidframe);

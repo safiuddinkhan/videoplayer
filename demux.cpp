@@ -467,8 +467,8 @@ int yes_pause = 0;
 int fc = 0;
 //////
 av_init_packet(&packet);
-int max_videobuffer = 30;
-int max_audiobuffer = 30;
+int max_videobuffer = 50;
+int max_audiobuffer = 50;
 int ret;
  //ret = av_read_frame(sc->pFormatCtx, &packet);
 empty_buffers(sc);
@@ -477,7 +477,9 @@ avcodec_flush_buffers(sc->videoctx);
 if(sc->audiostream != -1)
 avcodec_flush_buffers(sc->audioctx);
 
-
+int mode = false;
+int mode1 = false;
+int mode2 = false;
 
 av_read_play(sc->pFormatCtx);
 
@@ -527,7 +529,7 @@ pthread_mutex_unlock(&sc->videolock);
 
 pthread_cond_broadcast(&sc->decodecond1); 
 
-cout <<"Video Buffer Read..."<<endl;
+//cout <<"Video Buffer Read..."<<endl;
 }else if(packet.stream_index==sc->audiostream){
 
 pthread_mutex_lock(&sc->audiolock);
@@ -570,13 +572,24 @@ pthread_cond_broadcast(&sc->decodecond);
 }  
 */
 
+
 if(fc == 0){
-if((sc->audiobuffer.size() < 10 || sc->videobuffer.size() < 10)){
+if(sc->videostream != -1 && sc->audiostream != -1)
+mode = (sc->audiobuffer.size() < 10 && sc->videobuffer.size() < 10);  
+
+ if(sc->videostream == -1)
+mode = (sc->audiobuffer.size() < 10); 
+
+if(sc->audiostream == -1)
+mode = (sc->videobuffer.size() < 10); 
+
+
+
+if(mode){
 fc = 1;
 cout <<"---------------------"<<endl; 
 cout <<"Buffer Low...."<<endl;
 cout <<"---------------------"<<endl; 
-
 //sc->status = MP_PAUSE;
 put_status(MP_PAUSE,sc);
 // Store current time of master clock 
@@ -587,16 +600,9 @@ pthread_mutex_lock(&sc->pauselock);
 sc->pausetoggle = 1;
 pthread_mutex_unlock(&sc->pauselock);
 
-
-
-//////////////////////////////////////////////
-
-/////////////////////////////
 if(sc->stop == 1){
   break;
 }
-/////////////////////////////
-
 
 int64_t timediff;
 timediff = av_gettime();
@@ -640,6 +646,8 @@ cout <<sc->audiopause<<" - "<<sc->videopause<<endl;
 //////////////////////////////////////////////
 pause_over = 1;
 }
+
+
 }
 
 //if(sc->audiobuffer.size() > 10 || sc->videobuffer.size() > 10){
@@ -649,18 +657,51 @@ pause_over = 1;
 
 
 pthread_mutex_lock(&sc->pauselock);
+if(sc->videostream != -1 && sc->audiostream != -1){
 if(sc->audiopause == 1 && sc->videopause == 1){
 yes_pause = 1;
 }else{
 yes_pause = 0;
 pause_over = 0;
-fc = 0;
+//fc = 0;
 } 
+}
+
+if(sc->videostream == -1){
+if(sc->audiopause == 1){
+yes_pause = 1;
+}else{
+yes_pause = 0;
+pause_over = 0;
+//fc = 0;
+} 
+}
+
+if(sc->audiostream == -1){
+if(sc->videopause == 1){
+yes_pause = 1;
+}else{
+yes_pause = 0;
+pause_over = 0;
+//fc = 0;
+} 
+}
+
+
 pthread_mutex_unlock(&sc->pauselock);
 
 cout <<"yes_pause:"<<yes_pause<<" - fc:"<<fc<<" - pause_over:"<<pause_over<<endl;
 
-if(yes_pause == 1 && fc == 1 && (sc->audiobuffer.size() > 300 || sc->videobuffer.size() > 300) && pause_over == 1){
+if(sc->videostream != -1 && sc->audiostream != -1)
+mode1 = (sc->audiobuffer.size() > 300 && sc->videobuffer.size() > 300); 
+
+if(sc->videostream == -1)
+mode1 = (sc->audiobuffer.size() > 300); 
+
+if(sc->audiostream == -1)
+mode1 = (sc->videobuffer.size() > 300); 
+
+if(yes_pause == 1 && fc == 1 && mode1 && pause_over == 1){
 
 // Send single to all threads to unpause
 pthread_mutex_lock(&sc->pauselock);
@@ -690,8 +731,17 @@ pause_over = 0;
 //fc = 0;
 //} 
 
+if(sc->videostream != -1 && sc->audiostream != -1)
+mode2 = (sc->audiobuffer.size() > 500 && sc->videobuffer.size() > 500);  
 
-if(sc->audiobuffer.size() > 500 || sc->videobuffer.size() > 500){
+if(sc->videostream == -1)
+mode2 = (sc->audiobuffer.size() > 500); 
+
+if(sc->audiostream == -1)
+mode2 = (sc->videobuffer.size() > 500); 
+
+
+if(mode2){
 
 av_read_pause(sc->pFormatCtx);
 pthread_mutex_lock(&sc->demuxlock);
@@ -741,34 +791,6 @@ pthread_mutex_unlock(&sc->demuxlock);
 }
 
 
-
-
-
-/*
-if((sc->audiobuffer.size() > max_audiobuffer && sc->videobuffer.size() > max_videobuffer && sc->videostream != -1 && sc->audiostream != -1) || 
-(sc->audiobuffer.size() > max_audiobuffer && sc->videostream == -1)){
-cout <<"Hello.."<<endl;
-//if(sc->networkstream)
-//av_read_pause(sc->pFormatCtx);
-
-pthread_cond_broadcast(&sc->decodecond);
-//av_read_pause(sc->pFormatCtx);
-pthread_mutex_lock(&sc->demuxlock);
-sc->demuxpause = 1;
-pthread_cond_broadcast(&sc->demux_waitcond);  
-pthread_cond_wait(&sc->demuxcond, &sc->demuxlock);
-sc->demuxpause = 0;
-pthread_mutex_unlock(&sc->demuxlock);
-
-//if(sc->networkstream)
-//av_read_play(sc->pFormatCtx); 
-
-
-//av_read_play(sc->pFormatCtx);
-
-}
-*/
-
 }
 
 
@@ -783,6 +805,7 @@ sc->endthread = 1;
 
 int j = 0;
 while(true){
+
 pthread_mutex_lock(&sc->end_status_lock1);
 if(sc->end_audiothread == 1)
 j = j + 1;
