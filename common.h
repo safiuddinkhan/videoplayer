@@ -14,8 +14,12 @@ extern "C" {
 #include "libavutil/common.h"
 #include "libavdevice/avdevice.h"
 #include "libavutil/avstring.h"	
+#include <libavcodec/vaapi.h>
 }
 
+#include <va/va.h>
+#include <va/va_x11.h>
+#include <X11/Xlib.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <iostream>
@@ -29,7 +33,11 @@ extern "C" {
 #include <taglib/id3v2frame.h>
 #include <taglib/attachedpictureframe.h>
 
-
+#define CHECK_VASTATUS(va_status,func)                                  \
+if (va_status != VA_STATUS_SUCCESS) {                                   \
+    fprintf(stderr,"%s:%s (%d) failed,exit\n", __func__, func, __LINE__); \
+    exit(1);                                                            \
+}
 //#include <va/va.h>
 
 

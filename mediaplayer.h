@@ -76,6 +76,9 @@ pthread_mutex_t videolock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t demuxlock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t demuxcond;
 
+pthread_mutex_t demuxpauselock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t demuxpausecond;
+int demuxpausetoggle;
 
 pthread_mutex_t decodelock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t decodecond;
@@ -153,17 +156,27 @@ int videosync;
 
 SwsContext * convert_ctx;
 AVFrame *vidframe1;
+//AVFrame *vidframe;
 uint8_t *vidbuffer;
 void * opaque;
-void (*video_callback)(double , void *);
+void (*video_callback)(void * ,void ** , double , void *);
+void (*audio_callback)(uint8_t *,int , double , void *);
+Display *x11_dpy;
+VASurfaceID surface_id;
+Window window;
+Pixmap pix;
+GC gc;
 };
 
 
 class mediaplayer{
 private:
 
-void (*init_video)(uint8_t ** , int * , void *);
-void (*video_callback)(double , void *);
+//void (*init_video)(void ** , int * , void *);
+//void (*video_callback)(double , void *);
+//void (*audio_callback)(uint8_t *,int , double , void *);
+//enum AVPixelFormat(*get_format)(struct AVCodecContext *s, const enum AVPixelFormat *fmt);
+
 void audio_pause_callback(int toggle);
 static void put_status(mediaplayer_status status,stream_context *sc);
 static void empty_buffers(stream_context *sc);
@@ -173,6 +186,7 @@ static int getdecodedaudioframe(stream_context *sc,AVFrame *audioframe);
 static void *audioplayback(void *arg);
 static void *videoplayback(void *arg);
 static void *demuxer(void *arg);
+
 
 int findandopencodec(AVCodecContext *pCodecCtx);
 int loadfile(char *url,stream_context *streamcontext);
@@ -185,13 +199,18 @@ int height;
 int width;
 int samplerate;
 int channels;
+int aspect_ratio_num;
+int aspect_ratio_den;
+Window window;
+Pixmap pix;
+GC gc;
 stream_type streamtype;
-mediaplayer(char *file,char *fourcc_code);
+mediaplayer(char *file,char *fourcc_code,Display *display);
 audio *get_playback_audioframe();
 //virtual void video_callback();
 
 
-void set_videocallback(void  (*init_video)(uint8_t ** , int * , void *) , void (*video_callback)(double , void *),void * opaque);
+void set_callbacks(void  (*init_video)(void ** , int * , void *) , void (*video_callback)(void *,void ** , double , void *),void (*audio_callback)(uint8_t *,int , double , void *),void * opaque);
 
 video *next_videoframe();
 audio *next_audioframe();

@@ -14,6 +14,13 @@ int len = 0;
 //cout <<"New Loop..."<<endl;
 //pthread_mutex_lock(&sc->demuxlock);
 //pthread_mutex_unlock(&sc->demuxlock);
+//if(sc->pausetoggle == 1)
+//return -2;  
+
+//if(sc->pausetoggle == 1){
+//return -2;  
+//}
+
 pthread_cond_signal(&sc->demuxcond);
 
 
@@ -40,6 +47,7 @@ if(sc->endthread == 1){
 return -1;
 }
 
+
 //cout <<"I am here.."<<endl;
 pthread_mutex_lock(&sc->decodelock1);
 pthread_cond_wait(&sc->decodecond1, &sc->decodelock1);
@@ -47,22 +55,26 @@ pthread_mutex_unlock(&sc->decodelock1);
 pthread_cond_signal(&sc->demuxcond);
 //cout <<"I have crossed this..."<<endl;
 
+if(sc->endthread == 1 && sc->videobuffer.size() == 0){
+  cout <<" Video Decoding Ended..."<<endl;
+return -1;
+}  
+
+
 if(sc->stop == 1){
 cout <<"Stop Signal Received by Video Thread..."<<endl;
 pthread_cond_broadcast(&sc->demuxcond);
   return -1;
 }
 
-//if(sc->endthread == 1){
-//  cout <<" Video Decoding Ended..."<<endl;
-//return -1;
-//}
-
-if(sc->pausetoggle == 1)
+if(sc->pausetoggle == 1){
 return -2;	
+}
 
 
 }
+
+
 
 //pthread_mutex_unlock(&sc->videolock);
 
@@ -73,6 +85,22 @@ pthread_mutex_unlock(&sc->videolock);
 
 //packet.flags = AV_PKT_FLAG_KEY;
 
+/*
+if(sc->videoctx->hwaccel == NULL){
+  cout <<"hardware accelerator not set..."<<endl;
+}else{
+  cout <<"hardware accelerator - "<<sc->videoctx->hwaccel->name<<" - "<<sc->videoctx->hwaccel->pix_fmt<<" - "<<AV_PIX_FMT_VAAPI_VLD<<endl;
+}
+
+if(sc->videoctx->hwaccel_context == NULL){
+  cout <<"VAPPI context not found..."<<endl;
+}else{
+  cout <<"VAAPI context found..."<<endl;
+vaapi_context * vc = (vaapi_context *)sc->videoctx->hwaccel_context;
+cout <<"display = "<<vc->display<<endl;
+
+}
+*/
 
 len = avcodec_decode_video2(sc->videoctx, vidframe, &vidframefinished,&packet);
 av_free_packet(&packet);
@@ -87,6 +115,8 @@ return -3;
 if(vidframefinished){
 return 0;
 }
+
+
 
 // if (packet.data) {
 //  packet.size -= len;
@@ -167,15 +197,17 @@ pthread_mutex_unlock(&sc->pauselock);
 
 
 ret = getdecodedvideoframe(sc,vidframe);
-cout <<"Video Decoder Status:"<<ret<<endl;
+//cout <<"Video Decoder Status:"<<ret<<endl;
 
 if(ret == -1){
 break;
 }else if(ret == -2){
 goto videopause;
 }else if(ret == 0){
-sws_scale(sc->convert_ctx,vidframe->data,vidframe->linesize,0,vidframe->height,sc->vidframe1->data,sc->vidframe1->linesize);
 
+if(sc->videoctx->hwaccel_context == NULL){
+sws_scale(sc->convert_ctx,vidframe->data,vidframe->linesize,0,vidframe->height,sc->vidframe1->data,sc->vidframe1->linesize);
+}
 //cout <<"Hello..."<<endl;
 sc->videopts = (double)av_frame_get_best_effort_timestamp(vidframe) * (double)sc->videobasetime;
 duration = ((double)av_frame_get_pkt_duration(vidframe) * (double)sc->videobasetime)* AV_TIME_BASE;
@@ -211,7 +243,7 @@ ts_diff = av_compare_ts(av_frame_get_best_effort_timestamp(vidframe),sc->pFormat
 }
 
 
-cout <<"Video PTS:"<<sc->videopts<<" - Audio PTS:"<<sc->audiopts<<" - Master Clock:"<<sc->masterclock->gettime()<<" | "<<sc->audiobuffer.size()<<" - "<<sc->videobuffer.size()<<endl;  
+//cout <<"Video PTS:"<<sc->videopts<<" - Audio PTS:"<<sc->audiopts<<" - Master Clock:"<<sc->masterclock->gettime()<<" | "<<sc->audiobuffer.size()<<" - "<<sc->videobuffer.size()<<endl;  
 //cout <<"ts_diff ="<<ts_diff<<endl;
 
 delay = (sc->videopts - sc->masterclock->gettime()) * AV_TIME_BASE; 
@@ -241,7 +273,50 @@ if(delay < 0)
 delay = 0;
 
 av_usleep(delay);
-sc->video_callback(sc->videopts,sc->opaque);
+//////////////// Video Acceleration //////////////// 
+/*
+VAStatus va_status;
+VAConfigID config_id;
+VAContextID context_id;
+VADisplay va_dpy;
+
+vaapi_context *vc = (vaapi_context*)sc->videoctx->hwaccel_context;
+va_dpy = vc->display;
+VASurfaceID id = (VASurfaceID)(uintptr_t)vidframe->data[3];
+va_status = vaSyncSurface(va_dpy, id);
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"Successful..."<<endl;
+}
+
+vaPutSurface(va_dpy, id, sc->window,
+                        0, 0,
+                        sc->videoctx->width, sc->videoctx->height,
+                        0, 0,
+                        sc->videoctx->width, sc->videoctx->height,
+                        NULL, 0,
+                        VA_FRAME_PICTURE);
+
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"Done putsurface Successful..."<<endl;
+//  XCopyArea(sc->x11_dpy, sc->pix, sc->window, sc->gc, 0, 0,
+//          sc->videoctx->height, sc->videoctx->width,
+//          0, 0);
+  }
+
+
+
+
+
+
+
+cout <<"------------------------------------"<<endl;
+cout <<"display:"<<sc->x11_dpy<<endl;
+//XSync(sc->x11_dpy,false);
+//XFlush(sc->x11_dpy);
+*/
+//////////////// Video Acceleration ////////////////
+
+sc->video_callback(sc->videoctx->hwaccel_context,(void**)vidframe->data,sc->videopts,sc->opaque);
 //cout <<"Delay:"<<delay<<" - Duration:"<<duration<<endl;
 
 /*
@@ -263,14 +338,14 @@ sc->vout = sc->cc->convert(sc->vout1);
 //pthread_mutex_unlock(&sc->videoframelock);
 
 
-pthread_mutex_lock(&sc->video_seek_status_lock);
+//pthread_mutex_lock(&sc->video_seek_status_lock);
 if(sc->videoseek == 1){
   sc->videoseek = 0;
 }
-pthread_mutex_unlock(&sc->video_seek_status_lock);
+//pthread_mutex_unlock(&sc->video_seek_status_lock);
 
 //sc->status = MP_PLAYING;
-put_status(MP_PLAYING,sc);
+//put_status(MP_PLAYING,sc);
 
 
 }
@@ -285,7 +360,14 @@ put_status(MP_PLAYING,sc);
 //
 }
 
+
+
 pthread_cond_broadcast(&sc->decodecond);
+
+pthread_mutex_lock(&sc->demuxpauselock);
+sc->demuxpausetoggle = 0;
+pthread_mutex_unlock(&sc->demuxpauselock);
+pthread_cond_broadcast(&sc->demuxpausecond); 
 
 pthread_mutex_lock(&sc->end_status_lock2);
 sc->end_videothread = 1;

@@ -13,6 +13,13 @@ int len;
 //while(true){
 //pthread_mutex_lock(&sc->demuxlock);
 //pthread_mutex_unlock(&sc->demuxlock);
+//if(sc->pausetoggle == 1)
+//return -2;  
+
+//if(sc->pausetoggle == 1){
+//return -2;  
+//}
+
 
 pthread_cond_signal(&sc->demuxcond);
 
@@ -32,6 +39,10 @@ if(sc->endthread == 1){
  return -1;
 }
 
+if(sc->pausetoggle == 1){
+return -2;  
+}
+
  // cout << "start..."<<endl;
 pthread_mutex_lock(&sc->decodelock);
 pthread_cond_wait(&sc->decodecond, &sc->decodelock);
@@ -46,10 +57,10 @@ pthread_cond_broadcast(&sc->demuxcond);
 }
 
 
-//if(sc->endthread == 1){
-//  cout <<" Audio Decoding Ended..."<<endl;
-// return -1;
-//}
+if(sc->endthread == 1 && sc->audiobuffer.size() == 0){
+  cout <<" Audio Decoding Ended..."<<endl;
+ return -1;
+}
 
 if(sc->pausetoggle == 1)
 return -2;
@@ -123,6 +134,7 @@ av_samples_alloc(&dst_data, NULL, curr_ch, default_sample_size, AV_SAMPLE_FMT_S1
 int fc =0;
 int endaudiothread = 0;
 ////////////////////////////////////////////////////
+/*
 audio *out;
 int default_driver;
 ao_device *device;
@@ -140,7 +152,7 @@ device = ao_open_live(default_driver, format, NULL);
   if (device == NULL) {
   cout <<"Sound Error..."<<endl;
     }
-
+*/
 ////////////////////////////////////////////////////
     int fc1 = 0;
 double duration;
@@ -234,9 +246,9 @@ cout <<"Audio Frame Dropped..."<<endl;
 }else{
 
 
-if(sc->videostream == -1){
-  cout <<"Video PTS:"<<sc->videopts<<" - Audio PTS:"<<sc->audiopts<<" - Master Clock:"<<sc->masterclock->gettime()<<" | "<<sc->audiobuffer.size()<<" - "<<sc->videobuffer.size()<<endl;  
-}
+//if(sc->videostream == -1){
+//  cout <<"Video PTS:"<<sc->videopts<<" - Audio PTS:"<<sc->audiopts<<" - Master Clock:"<<sc->masterclock->gettime()<<" | "<<sc->audiobuffer.size()<<" - "<<sc->videobuffer.size()<<endl;  
+//}
 
 
 
@@ -264,15 +276,17 @@ delay = 0;
 av_usleep(delay);
  
 //sc->status = MP_PLAYING;
-ao_play(device, (char *)dst_data, ret*curr_ch*(format->bits/8));
+//ao_play(device, (char *)dst_data, ret*curr_ch*(format->bits/8));
 
-pthread_mutex_lock(&sc->audio_seek_status_lock);
+sc->audio_callback(dst_data,ret,sc->audiopts,sc->opaque);
+
+//pthread_mutex_lock(&sc->audio_seek_status_lock);
 if(sc->audioseek == 1){
   sc->audioseek = 0;
 }
-pthread_mutex_unlock(&sc->audio_seek_status_lock);
+//pthread_mutex_unlock(&sc->audio_seek_status_lock);
 
-put_status(MP_PLAYING,sc);
+//put_status(MP_PLAYING,sc);
 
 
 
@@ -297,6 +311,10 @@ put_status(MP_PLAYING,sc);
 }
 
 pthread_cond_broadcast(&sc->decodecond1);
+pthread_mutex_lock(&sc->demuxpauselock);
+sc->demuxpausetoggle = 0;
+pthread_mutex_unlock(&sc->demuxpauselock);
+pthread_cond_broadcast(&sc->demuxpausecond); 
 
 pthread_mutex_lock(&sc->end_status_lock1);
 sc->end_audiothread = 1;
@@ -314,11 +332,11 @@ swr_free (&swr_ctx);
 cout <<"audio loop break"<<endl;
 av_free(audioframe);
 //sc->stop = 1;
-ao_close(device);
+//ao_close(device);
 //free(format);
 //sc->audioctx->skip_frame = AVDISCARD_ALL ;
 avcodec_flush_buffers(sc->audioctx);
- ao_shutdown();
+// ao_shutdown();
 //sc->status = MP_STOP; 
 pthread_exit(NULL);  
 }

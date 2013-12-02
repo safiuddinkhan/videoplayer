@@ -1,4 +1,244 @@
 #include "mediaplayer.h"
+Display *x11_display;
+VASurfaceID surface_id;
+VAEntrypoint entrypoints[5];
+//int surf_id;
+VADisplay va_dpy;
+int va_format = 0;
+int i;
+int profile;
+int major_ver, minor_ver;
+VAStatus va_status;
+ int num_entrypoints,vld_entrypoint;
+///////////////////////// Video Acceleration /////////////////////////
+enum AVPixelFormat get_format_vaapi(struct AVCodecContext *s, const enum AVPixelFormat *fmt){
+vaapi_context *vc = new vaapi_context();
+//surf_id = 0;
+
+cout <<"--------------------------------------------------------------------"<<endl;
+cout <<"Negotiating the pixelFormat..."<<endl;
+cout <<"--------------------------------------------------------------------"<<endl;
+
+
+
+    VAConfigAttrib attrib;
+    VAConfigID config_id;
+    VAContextID context_id;
+    //VABufferID pic_param_buf,iqmatrix_buf,slice_param_buf,slice_data_buf;
+
+    
+    int putsurface=0;
+
+
+
+for(i = 0;fmt[i] != AV_PIX_FMT_NONE;i++){
+cout <<"Supported Pixel Formats:"<<fmt[i]<<endl;
+if (fmt[i] != PIX_FMT_VAAPI_VLD)
+continue;
+
+switch (s->codec_id) {
+case CODEC_ID_MPEG2VIDEO:
+profile = VAProfileMPEG2Main;
+cout <<"MPEG 2 Profile Found..."<<endl;
+break;
+case CODEC_ID_MPEG4:
+case CODEC_ID_H263:
+profile = VAProfileMPEG4AdvancedSimple;
+cout <<"MPEG4 Profile Found..."<<endl;
+break;
+case CODEC_ID_H264:
+profile = VAProfileH264High;
+cout <<"H264 Profile Found..."<<endl;
+break;
+case CODEC_ID_WMV3:
+profile = VAProfileVC1Main;
+cout <<"WMV3 Profile Found..."<<endl;
+break;
+case CODEC_ID_VC1:
+profile = VAProfileVC1Advanced;
+cout <<"VC1 Profile Found..."<<endl;
+break;
+default:
+profile = -1;
+break;
+}
+
+
+if (profile >= 0) {
+/*
+va_dpy = vaGetDisplay(x11_display);
+va_status = vaInitialize(va_dpy, &major_ver, &minor_ver);
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"VAAPI initialized successfully..."<<endl;
+}
+*/
+//vaapi_context *vc = new vaapi_context();
+/*
+va_status = vaQueryConfigEntrypoints(va_dpy, (VAProfile)profile, entrypoints, &num_entrypoints);
+cout <<"No of entry points = "<<num_entrypoints<<endl;
+    //CHECK_VASTATUS(va_status, "vaQueryConfigEntrypoints");
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"Entry Point Queryed Successfully..."<<endl;
+}
+
+  for (vld_entrypoint = 0; vld_entrypoint < num_entrypoints; vld_entrypoint++) {
+        if (entrypoints[vld_entrypoint] == VAEntrypointVLD)
+            break;
+    }
+
+ if (vld_entrypoint == num_entrypoints) {
+  
+//hw_accel_avalible = 0;
+      cout <<"VLD entrypoint not found..."<<endl;
+  return s->pix_fmt;
+    }else{
+      cout <<"VLD entrypoint located at:"<<vld_entrypoint<<endl;
+//hw_accel_avalible = 1;
+    }
+*/
+
+attrib.type = VAConfigAttribRTFormat;
+    vaGetConfigAttributes(va_dpy, (VAProfile)profile, VAEntrypointVLD,
+                          &attrib, 1);
+
+
+ if ((attrib.value & VA_RT_FORMAT_YUV420) == 0) {
+        cout << "not find desired YUV420 RT format..."<<endl;
+    }
+    
+
+
+ va_status = vaCreateConfig(va_dpy, (VAProfile)profile, VAEntrypointVLD,
+                              &attrib, 1,&config_id);
+
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"Config ID found..."<<endl;
+}
+
+
+
+switch(s->pix_fmt){
+case AV_PIX_FMT_YUV420P:
+va_format = VA_RT_FORMAT_YUV420;
+cout <<"format found... YUV420"<<endl;
+break;
+case AV_PIX_FMT_YUV422P:
+va_format = VA_RT_FORMAT_YUV422;
+cout <<"format found... YUV422"<<endl;
+break;
+}
+
+
+        va_status = vaCreateSurfaces(
+        va_dpy,
+        va_format, s->width,s->height,
+        &surface_id, 1,
+        NULL, 0
+    );
+
+
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"VA surface successfully created..."<<endl;
+}
+
+
+ va_status = vaCreateContext(va_dpy, config_id,
+                               s->coded_width,
+                               s->coded_height,
+                               VA_PROGRESSIVE,
+                               &surface_id,
+                               1,
+                               &context_id);
+
+vc->display = va_dpy;
+vc->config_id = config_id;
+vc->context_id = context_id;
+
+
+//avctx->hwaccel_context = vaapi_context;
+//return fmt[i];
+s->hwaccel_context = vc;
+cout <<"display = "<<vc->display<<endl;
+cout <<"config_id = "<<config_id<<endl;
+cout <<"context_id = "<<context_id<<endl;
+
+cout <<"Format to be used:"<<fmt[i]<<endl;
+return fmt[i];
+}
+
+////////////
+
+}
+return AV_PIX_FMT_NONE;
+}
+
+//////////////////////////////////////
+static void release_buffer(void *opaque, uint8_t *data)
+ {
+
+//// To do this later on ....
+
+//     VdpVideoSurface surface = *(VdpVideoSurface*)data;
+//     VDPAUContext *ctx = opaque;
+
+//     ctx->video_surface_destroy(surface);
+    vaDestroySurfaces(va_dpy,(VASurfaceID *)&data,1);
+ 
+  //  av_freep(&data);
+ }
+
+
+static int get_buffer(struct AVCodecContext *avctx, AVFrame *pic,int flags)
+{
+ //   VAAPIContext * const vaapi = vaapi_get_context();
+  //cout <<"S ----- Get Buffer Callback ----- "<<endl;
+
+  
+
+    void *surface = (void *)(uintptr_t)surface_id;
+   // pic->type           = FF_BUFFER_TYPE_USER;
+//    pic->age            = 1;
+    pic->data[0]        = (uint8_t *)surface;
+    pic->data[1]        = NULL;
+    pic->data[2]        = NULL;
+    pic->data[3]        = (uint8_t *)surface;
+
+    //pic->extended_data = (uint8_t**)surface;
+
+    VAStatus va_status;
+
+
+        va_status = vaCreateSurfaces(va_dpy,va_format, avctx->width,avctx->height,&surface_id, 1,NULL, 0);
+
+
+//if(va_status == VA_STATUS_SUCCESS){
+//  cout <<"VA surface successfully created..."<<endl;
+//}
+
+//cout <<"Surface No "<<surf_id<<" being used..."<<endl;
+
+    pic->buf[0] = av_buffer_create((uint8_t *)surface,sizeof((uint8_t *)surface),release_buffer,NULL,AV_BUFFER_FLAG_READONLY);
+
+
+    //pic->linesize[0]    = 0;
+    //pic->linesize[1]    = 0;
+    //pic->linesize[2]    = 0;
+    //pic->linesize[3]    = 0;
+   // cout <<"E ----- Get Buffer Callback ----- "<<endl;
+    return 0;
+}
+
+static void release_buffer(struct AVCodecContext *avctx, AVFrame *pic)
+{
+    pic->data[0]        = NULL;
+    pic->data[1]        = NULL;
+    pic->data[2]        = NULL;
+    pic->data[3]        = NULL;
+}
+
+
+///////////////////////// Video Acceleration /////////////////////////
+
 
 int mediaplayer::findandopencodec(AVCodecContext *pCodecCtx){
 
@@ -67,6 +307,10 @@ AVInputFormat *format = NULL;
 stream_type st = stream_detector(url);
 sc->streamtype = st;  
 
+//////////// Test Network stream
+//st = sc->streamtype = stream_network;
+//-------------------------------
+
 if(st == stream_network){  
 sc->networkstream = 1; 
 }else{
@@ -125,7 +369,7 @@ strcpy(url,path);
 //}
 
 AVDictionary *options = NULL;
-//av_dict_set(&options, "video_size", "320x240", 0);
+av_dict_set(&options, "video_size", "640x480", 0);
 //av_dict_set(&options, "pixel_format", "rgb24", 0);
 
 
@@ -206,11 +450,90 @@ avcodec_open2(sc->videoctx, pCodec,NULL);
 
 }else{
 //// If no png then open codec normally 
+
 sc->videoctx = sc->pFormatCtx->streams[i]->codec; 
+
+/////////////////// Hardware Acceleration ///////////////////
+switch (sc->videoctx->codec_id) {
+case CODEC_ID_MPEG2VIDEO:
+profile = VAProfileMPEG2Main;
+cout <<"MPEG 2 Profile Found..."<<endl;
+break;
+case CODEC_ID_MPEG4:
+case CODEC_ID_H263:
+profile = VAProfileMPEG4AdvancedSimple;
+cout <<"MPEG4 Profile Found..."<<endl;
+break;
+case CODEC_ID_H264:
+profile = VAProfileH264High;
+cout <<"H264 Profile Found..."<<endl;
+break;
+case CODEC_ID_WMV3:
+profile = VAProfileVC1Main;
+cout <<"WMV3 Profile Found..."<<endl;
+break;
+case CODEC_ID_VC1:
+profile = VAProfileVC1Advanced;
+cout <<"VC1 Profile Found..."<<endl;
+break;
+default:
+profile = -1;
+break;
+}
+
+
+if (profile >= 0) {
+va_dpy = vaGetDisplay(x11_display);
+va_status = vaInitialize(va_dpy, &major_ver, &minor_ver);
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"VAAPI initialized successfully..."<<endl;
+
+
+va_status = vaQueryConfigEntrypoints(va_dpy, (VAProfile)profile, entrypoints, &num_entrypoints);
+cout <<"No of entry points = "<<num_entrypoints<<endl;
+
+if(va_status == VA_STATUS_SUCCESS){
+  cout <<"Entry Point Queryed Successfully..."<<endl;
+
+  for (vld_entrypoint = 0; vld_entrypoint < num_entrypoints; vld_entrypoint++) {
+        if (entrypoints[vld_entrypoint] == VAEntrypointVLD)
+            break;
+    }
+
+ if (vld_entrypoint == num_entrypoints) {
+      cout <<"VLD entrypoint not found..."<<endl;
+    }else{
+      cout <<"VLD entrypoint located at:"<<vld_entrypoint<<endl;
+sc->videoctx->get_format = get_format_vaapi;
+sc->videoctx->get_buffer2 = get_buffer;
+//sc->videoctx->release_buffer = release_buffer;
+//sc->videoctx->reget_buffer = get_buffer;
+sc->videoctx->draw_horiz_band = NULL;
+sc->videoctx->slice_flags     = SLICE_FLAG_CODED_ORDER|SLICE_FLAG_ALLOW_FIELD;
+
+    }
+
+
+
+
+}
+}
+}
+//vaapi_context *vc = new vaapi_context();
+
+
+
+//sc->videoctx->thread_count = 2;
+
+//hwaccel_context = &sc->videoctx->hwaccel_context;
+
+/////////////////// Hardware Acceleration ///////////////////
+
+cout <<"height before = "<<sc->pFormatCtx->streams[i]->codec->height<<" - "<<sc->pFormatCtx->streams[i]->codec->width<<endl;
 findandopencodec(sc->videoctx);
 }
 
-sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
+//sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
 
 
 }
@@ -222,7 +545,7 @@ if(as == 0){
 sc->audiostream=i;
 sc->audioctx = sc->pFormatCtx->streams[i]->codec;
 findandopencodec(sc->audioctx);
-sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
+//sc->pFormatCtx->streams[i]->discard = AVDISCARD_DEFAULT;
 }
 as = as + 1;
 break;
@@ -241,6 +564,8 @@ sc->videobasetime = av_q2d(sc->pFormatCtx->streams[sc->videostream]->time_base);
 
 height = sc->pFormatCtx->streams[sc->videostream]->codec->height;
 width = sc->pFormatCtx->streams[sc->videostream]->codec->width;
+aspect_ratio_num = sc->videoctx->sample_aspect_ratio.num;
+aspect_ratio_den = sc->videoctx->sample_aspect_ratio.den;
 sc->pixelformat = sc->pFormatCtx->streams[sc->videostream]->codec->pix_fmt;
 }
 
@@ -360,35 +685,6 @@ cout << "Incorrect URL..."<<endl;
 //////////////////////////////////////////////////////////////////////////
 
 
-///////////////////////// Video Acceleration /////////////////////////
-/*
-VAEntrypoint entrypoints[5];
- int num_entrypoints,vld_entrypoint;
-    VAConfigAttrib attrib;
-    VAConfigID config_id;
-    VASurfaceID surface_id;
-    VAContextID context_id;
-    VABufferID pic_param_buf,iqmatrix_buf,slice_param_buf,slice_data_buf;
-    int major_ver, minor_ver;
-    VADisplay va_dpy;
-    VAStatus va_status;
-    int putsurface=0;
-
-
-AVHWAccel *hwainfo = new AVHWAccel();
-hwainfo = sc->videoctx->hwaccel;
-//cout <<hwainfo->type<<endl;
-
-AVHWAccel* hwaccel = NULL; 
-while(hwaccel = av_hwaccel_next(hwaccel)){
-cout <<hwaccel->name<<" - "<<hwaccel->pix_fmt<<" - "<<AV_PIX_FMT_VAAPI_VLD<<endl;
-if(sc->videoctx->codec_id == hwaccel->id)
-  break;
-}
-sc->videoctx->hwaccel_context = hwaccel;
-
-*/
-///////////////////////// Video Acceleration /////////////////////////
 
 cout <<"line - 1"<<endl;
 
@@ -454,7 +750,7 @@ return entry;
 
 }
 
-mediaplayer::mediaplayer(char *file,char *fourcc_code){
+mediaplayer::mediaplayer(char *file,char *fourcc_code,Display *display){
 
 //cout <<avdevice_configuration ()<<endl;
 
@@ -468,6 +764,8 @@ width = 0;
 
 sc = new stream_context();
 ///////////////////////////////////////////////
+x11_display = display;
+sc->x11_dpy = display;
 sc->tag = NULL;
 sc->pFormatCtx = avformat_alloc_context();
 sc->attachedimage = 0;
@@ -502,7 +800,7 @@ pthread_cond_init (&sc->pausecond, NULL);
 pthread_cond_init (&sc->audio_waitcond, NULL);
 pthread_cond_init (&sc->video_waitcond, NULL);
 pthread_cond_init (&sc->demux_waitcond, NULL);
-
+pthread_cond_init (&sc->demuxpausecond, NULL);
 pthread_cond_init (&sc->decodecond, NULL);
 pthread_cond_init (&sc->decodecond1, NULL);
 pthread_cond_init (&sc->audioframeupdate, NULL);
@@ -530,8 +828,8 @@ sc->pixel_format = fourcc_code;
 int numBytes;
 
 
-int height;
-int width;
+//int height;
+//int width;
 
 cout <<"Here.."<<endl;
 AVPixelFormat dstfmt = get_avpixelformat(sc->pixel_format);
@@ -544,23 +842,12 @@ if(dstfmt == AV_PIX_FMT_NONE){
 cout <<sc->pixel_format<<endl;
 
 sc->vidframe1 = avcodec_alloc_frame();
-height = sc->videoctx->height;
-width = sc->videoctx->width;
+//sc->vidframe = avcodec_alloc_frame();
+//avcodec_get_frame_defaults (sc->vidframe);
+
+
 
 ////////////////////////////////////////////////////////////////////////
-
-/*
-AVFrame *frame = avcodec_alloc_frame();
-int decode_ok;
-
-int len;
-while(true){
-  len = avcodec_decode_video2(sc->videoctx, frame, &decode_ok, &packet);
-if(decode_ok || len < 0){
-break;
-}
-}
-*/
 
 if(sc->videoctx->pix_fmt == AV_PIX_FMT_NONE){
 cout <<"Pixel Format Not Found..."<<endl; 
@@ -568,7 +855,9 @@ put_status(MP_ERROR,sc);
 }else{
 ////////////////////////////////////////////////////////////////////////
 
+cout <<"Source Pixel Format:"<<sc->videoctx->pix_fmt<<endl;
 numBytes=avpicture_get_size(dstfmt ,width,height);
+cout <<"Size of Video Buffer:"<<numBytes<<endl;
 sc->vidbuffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
 avpicture_fill((AVPicture *)sc->vidframe1, sc->vidbuffer, dstfmt ,width, height);
 
@@ -580,11 +869,13 @@ sc->convert_ctx = sws_getContext(width, height, sc->videoctx->pix_fmt,
                                    SWS_BICUBIC, NULL, NULL, NULL );
 
 
-sc->vout->data = sc->vidframe1->data;
-sc->vout->linesize = sc->vidframe1->linesize; 
+//sc->vout->data = sc->vidframe1->data;
+//sc->vout->linesize = sc->vidframe1->linesize; 
 
 }
 ////////////////////////////////////////////////////////////////
+
+
 }
 
 }
@@ -593,7 +884,12 @@ sc->vout->linesize = sc->vidframe1->linesize;
 
 }
 
-void mediaplayer::set_videocallback(void  (*init_video)(uint8_t ** , int * , void *) , void (*video_callback)(double , void *),void * opaque){
+void mediaplayer::set_callbacks(void  (*init_video)(void ** , int * , void *) , void (*video_callback)(void *,void **,double , void *),void (*audio_callback)(uint8_t *,int , double , void *),void * opaque){
+sc->window = window;
+sc->pix = pix;
+sc->gc = gc;
+cout <<"Callback function..."<<endl;
+
 cout <<"---------------------------------------"<<endl;
 switch(getstatus()){
 case MP_PLAYING:
@@ -615,17 +911,27 @@ break;
 cout <<"---------------------------------------"<<endl;
 
 cout <<sc->videostream<<" - "<<sc->attachedimage<<endl;
+
+sc->opaque = opaque;
+if(sc->audiostream != -1){
+  sc->audio_callback = audio_callback;
+}
+
+
 if((sc->videostream != -1 || sc->attachedimage == 1) && getstatus() != MP_ERROR){
 cout <<"executed.."<<endl;
 sc->video_callback = video_callback;
-sc->opaque = opaque;
-init_video(sc->vidframe1->data,sc->vidframe1->linesize,opaque);
+init_video((void**)sc->vidframe1->data,sc->vidframe1->linesize,opaque);
 }
 cout <<"not exexuted..."<<endl;
 
 }
 
 int mediaplayer::play(){
+////////// Video Acceleration ////////// 
+sc->surface_id = surface_id;
+////////// Video Acceleration //////////
+
 if(getstatus() == MP_ERROR)
 return -1;
 
@@ -685,7 +991,7 @@ sc->audio_flag = 0;
 
 sc->end_audiothread = 0;
 sc->end_videothread = 0;
-
+sc->demuxpausetoggle = 0;
 
 
 //sc->masterclock->settime(sc->start_time); 
@@ -697,12 +1003,22 @@ sc->end_videothread = 0;
 sc->stop = 0;
 //sc->status = MP_PLAYING;  
 put_status(MP_PLAYING,sc);
+  empty_buffers(sc);
+if(sc->videostream != -1)
+avcodec_flush_buffers(sc->videoctx);
+if(sc->audiostream != -1)
+avcodec_flush_buffers(sc->audioctx);
 
 
 if(sc->is_seekable){
+
+
 // Rewind Video to Start
-int ret = av_seek_frame(sc->pFormatCtx, -1, sc->pFormatCtx->start_time , AVSEEK_FLAG_BACKWARD);
+  cout <<"start time:"<<sc->pFormatCtx->start_time<<endl;
+int ret = av_seek_frame(sc->pFormatCtx, -1, sc->pFormatCtx->start_time , AVSEEK_FLAG_ANY);
 if(ret < 0){
+//sc->masterclock->settime(sc->start_time);
+//sc->masterclock->reset();
 cout <<"Seeking not supported for this video..."<<endl;
 }
 }
@@ -735,7 +1051,7 @@ pthread_cond_broadcast(&sc->demuxcond);
 pthread_cond_broadcast(&sc->video_waitcond);
 pthread_cond_broadcast(&sc->audio_waitcond);
 pthread_cond_broadcast(&sc->pausecond);
-
+pthread_cond_broadcast(&sc->demuxpausecond);
 pthread_cond_broadcast(&sc->decodecond1);
 pthread_cond_broadcast(&sc->decodecond);
 
@@ -793,6 +1109,7 @@ pthread_mutex_unlock(&sc->pauselock);
 
 
 //////////////////////////////////////////////
+/*
 int64_t timediff;
 timediff = av_gettime();
 
@@ -821,6 +1138,7 @@ timediff = av_gettime() - timediff;
 cout << "Pass - 2 - "<<timediff<<endl;
 
 cout <<sc->audiopause<<" - "<<sc->videopause<<endl;
+*/
 //////////////////////////////////////////////
 
 // Store current time of master clock 
@@ -843,21 +1161,51 @@ return -1;
 void mediaplayer::seek(double timestamp){
 if(sc->is_seekable == 1){  
 if(getstatus() == MP_PLAYING){
-if(sc->seek == 0){// && sc->videoseek == 0 && sc->audioseek == 0){ 
+int mode;
+int mode1;
+if(sc->videostream == -1){
+  pthread_mutex_lock(&sc->audio_seek_status_lock);
+  mode = sc->audioseek == 0;
+  pthread_mutex_unlock(&sc->audio_seek_status_lock);
+}
+
+if(sc->audiostream == -1){
+  pthread_mutex_lock(&sc->video_seek_status_lock);
+  mode = sc->videoseek == 0;
+  pthread_mutex_unlock(&sc->video_seek_status_lock);
+
+}
+
+if(sc->audioseek != -1 && sc->videoseek != -1){
+pthread_mutex_lock(&sc->video_seek_status_lock);
+mode1 = sc->videoseek == 0;
+pthread_mutex_unlock(&sc->video_seek_status_lock);
+
+
+pthread_mutex_lock(&sc->audio_seek_status_lock);
+mode = mode1 && sc->audioseek == 0;
+pthread_mutex_unlock(&sc->audio_seek_status_lock);
+}
+
+if(sc->seek == 0 && mode){// && sc->videoseek == 0 && sc->audioseek == 0){ 
 sc->seektime = timestamp;
 sc->seek = 1;
 seek_stream(sc->seektime,sc);
 //////////////////////////////////////////////
+/*
 int j = 0;
 while(true){
-
-if(sc->endthread == 1){
-//break;
+pthread_mutex_lock(&sc->demuxpauselock);
+sc->demuxpausetoggle = 0;
+pthread_mutex_unlock(&sc->demuxpauselock);
+pthread_cond_broadcast(&sc->demuxpausecond); 
 pthread_mutex_lock(&sc->pauselock);
 sc->pausetoggle = 0;
 pthread_mutex_unlock(&sc->pauselock);
-
 pthread_cond_broadcast(&sc->pausecond);
+
+
+if(sc->endthread == 1){
 pthread_cond_broadcast(&sc->decodecond1);
 pthread_cond_broadcast(&sc->decodecond);
 break;
@@ -881,11 +1229,13 @@ if(j > 0)
 break;  
 }
 
-cout <<"Wait for all threads to start again after seeking..."<<j<<endl;
+//cout <<"Wait for all threads to start again after seeking..."<<j<<endl;
 
 }
+*/
+cout <<"Seeking Over...."<<endl;
 //////////////////////////////////////////////
-
+put_status(MP_PLAYING,sc);
 sc->seek = 0;
 }
 
@@ -940,6 +1290,7 @@ sws_freeContext (sc->convert_ctx);
 delete(sc->aout);
 delete(sc->vout);
 av_free(sc->vidframe1);
+//av_free(sc->vidframe);
 av_freep(&sc->vidbuffer); 
 //delete(sc->vout1);
 //delete(sc->cc);

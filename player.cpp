@@ -5,6 +5,7 @@
 #include "mediaplayer.h"
 #include <iostream>
 #include <SDL/SDL.h>
+#include <ao/ao.h>
 
 
 int done = 0;
@@ -15,6 +16,9 @@ struct ctx{
 SDL_Surface *screen;
 SDL_Overlay *surf;
 SDL_Rect rect; 
+ao_device *device;
+ao_sample_format *audio_format;
+int channels;
 };
 
 
@@ -52,11 +56,18 @@ pthread_exit(NULL);
 */
 
 
+void audio_callback(uint8_t * data,int size, double pts, void * opaque){
+ctx *c = (ctx *)opaque;
+ao_play(c->device, (char *)data, size*c->channels*(c->audio_format->bits/8));
+}
 
-void video_init(uint8_t **data,int *linesize,void * opaque){
+
+
+void video_init(void **data,int *linesize,void * opaque){
    ctx *c = (ctx *)opaque;
 
 cout<<" Done..."<<endl;
+cout <<"linesize:"<<linesize[0]<<" - "<<linesize[1]<<" - "<<linesize[2]<<endl;
 SDL_LockYUVOverlay(c->surf);
 data[0] = c->surf->pixels[0];
 data[1] = c->surf->pixels[2];
@@ -67,12 +78,14 @@ linesize[1] = c->surf->pitches[2];
 linesize[2] = c->surf->pitches[1];
 SDL_UnlockYUVOverlay(c->surf);
 done = 1;
+cout <<"linesize:"<<linesize[0]<<" - "<<linesize[1]<<" - "<<linesize[2]<<endl;
+cout <<"linesize1:"<<c->surf->pitches[0]<<" - "<<c->surf->pitches[1]<<" - "<<c->surf->pitches[2]<<endl;
 
 
 }
 
 
-void video_callback(double pts,void * opaque){
+void video_callback(void * hardware_context , void **data , double pts,void * opaque){
   ctx *c = (ctx *)opaque;
 
 SDL_DisplayYUVOverlay(c->surf, &c->rect);	
@@ -105,7 +118,7 @@ cout <<"Test Player"<<endl;
 
 init_all();
 
-mediaplayer *mp = new mediaplayer(argv[1],(char *)"YV12");
+mediaplayer *mp = new mediaplayer(argv[1],(char *)"YV12",NULL);
 
 /*
 switch(mp->streamtype){
@@ -160,12 +173,26 @@ height = height / 2;
 
 }
 
-
+if((mp->aspect_ratio_num > mp->aspect_ratio_den) && (mp->width < mp->height)){
+	width = mp->height;
+	height = mp->width;
+}
 
 
 SDL_WM_SetCaption( "Experiemental Player", NULL );
 ctx c;
 
+int default_driver;
+//ao_device *device;
+ao_initialize();
+default_driver = ao_default_driver_id();
+c.audio_format = new ao_sample_format();
+
+c.audio_format->bits = 16;
+c.channels = 2;
+c.audio_format->channels = c.channels;
+c.audio_format->rate = mp->samplerate;
+c.audio_format->byte_format = AO_FMT_NATIVE;
 c.screen = SDL_SetVideoMode(width, height, 32, options);
 cout <<mp->width<<" - "<<mp->height<<endl;
 cout <<width<<" = "<<height<<endl;
@@ -175,9 +202,15 @@ c.surf = SDL_CreateYUVOverlay(mp->width, mp->height, SDL_YV12_OVERLAY, c.screen)
    c.rect.w = width;
    c.rect.h = height;
 
-mp->set_videocallback(video_init,video_callback,&c);
+c.device = ao_open_live(default_driver, c.audio_format, NULL);
+  if (c.device == NULL) {
+  cout <<"Sound Error..."<<endl;
+    }
 
 
+mp->set_callbacks(video_init,video_callback,audio_callback,&c);
+
+cout <<"here..."<<endl;
 
 
 SDL_Event event;

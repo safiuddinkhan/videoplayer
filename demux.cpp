@@ -10,6 +10,8 @@ while(true){
 
 if(sc->videobuffer.size() == 0 || sc->videobuffer.empty())
 break;
+
+
 //usleep(300);
 pthread_mutex_lock(&sc->videolock);
 packet = sc->videobuffer.front();
@@ -65,26 +67,26 @@ int ret;
 int timediff;
 
  
+if(sc->endthread == 1){
+cout <<" Could Not Seek bcz demuxer has ended..."<<endl;
+  return -1;
+}
 
 
 
 pthread_mutex_lock(&sc->pauselock);
 sc->pausetoggle = 1;
 pthread_mutex_unlock(&sc->pauselock);
-
+/*
 if(sc->networkstream){
 //cout <<"Hello network stream..."<<endl;
 pthread_mutex_lock(&sc->demuxlock);
 sc->demux_block = 1;
 pthread_mutex_unlock(&sc->demuxlock);
 }
-
+*/
 timediff = av_gettime();
 
-if(sc->endthread == 1){
-//cout <<" Could Not Seek bcz demuxer has ended..."<<endl;
-  return -1;
-}
 
 if(sc->audiostream != -1){
 pthread_cond_broadcast(&sc->decodecond);
@@ -112,14 +114,47 @@ cout << "Pass - 2 - "<<timediff<<endl;
 
 timediff = av_gettime();
 
-//pthread_cond_broadcast(&sc->decodecond);  
+pthread_cond_broadcast(&sc->demuxcond);  
+
+pthread_mutex_lock(&sc->demuxpauselock);
+sc->demuxpausetoggle = 1;
+pthread_mutex_unlock(&sc->demuxpauselock);
 
 
-pthread_mutex_lock(&sc->demuxlock);
-if(sc->demuxpause == 0) pthread_cond_wait(&sc->demux_waitcond, &sc->demuxlock);
-pthread_mutex_unlock(&sc->demuxlock);
+pthread_mutex_lock(&sc->demuxpauselock);
+if(sc->demuxpause == 0){
+pthread_mutex_unlock(&sc->demuxpauselock);
+while(true){
 
+if(sc->endthread == 1){
+cout <<" Could Not Seek bcz demuxer has ended..."<<endl;
+  return -1;
+}
+
+
+//pthread_mutex_lock(&sc->demuxpauselock);
+if(sc->demuxpause == 1)
+  break;
+//pthread_mutex_unlock(&sc->demuxpauselock);
+
+
+pthread_cond_broadcast(&sc->demuxcond);  
+cout <<"I am here..."<<endl;
+}
+pthread_mutex_unlock(&sc->demuxpauselock);
+
+//pthread_mutex_lock(&sc->demuxpauselock);
+//pthread_cond_wait(&sc->demux_waitcond, &sc->demuxpauselock);
+//pthread_mutex_unlock(&sc->demuxpauselock);
+
+
+}
+pthread_mutex_unlock(&sc->demuxpauselock);
+
+ // pthread_mutex_unlock(&sc->demuxlock);
 timediff = av_gettime() - timediff;
+
+
 
 cout << "Pass - 3 - "<<timediff<<endl;
 
@@ -164,13 +199,21 @@ cout <<"Hello 2 ..."<<endl;
 //            int64_t seek_max    = is->seek_rel < 0 ? seek_target - is->seek_rel - 2: INT64_MAX;
 ////////////////////////////
 int flag;
-//if(sc->seektime > 0){
-//  flag = 0;
-//}else{
+if(sc->seektime > sc->masterclock->gettime()){
+  flag = 0;
+}else{
   flag = AVSEEK_FLAG_BACKWARD;     
-//}
+}
 
 
+timediff = av_gettime();
+if(sc->videostream != -1)
+avcodec_flush_buffers(sc->videoctx);
+if(sc->audiostream != -1)
+avcodec_flush_buffers(sc->audioctx);
+//avio_flush(sc->pFormatCtx->pb);
+timediff = av_gettime() - timediff;
+cout <<"Time Taken for flushing LibAV buffers:"<<timediff<<endl;
 
 
 timediff = av_gettime();
@@ -185,20 +228,26 @@ cout <<"Time Taken for seeking:"<<timediff<<endl;
 
 if(ret < 0){
    //sc->status = MP_ERROR;
+cout <<"Seeking Error or EOF..."<<endl;
+
+  pthread_mutex_lock(&sc->demuxpauselock);
+sc->demuxpausetoggle = 0;
+pthread_mutex_unlock(&sc->demuxpauselock);
+pthread_cond_broadcast(&sc->demuxpausecond); 
+
+
+
+pthread_mutex_lock(&sc->pauselock);
+sc->pausetoggle = 0;
+pthread_mutex_unlock(&sc->pauselock);
+pthread_cond_broadcast(&sc->pausecond);
+
   put_status(MP_ERROR,sc);
   return -1;
 }
 
 
 //sc->videoctx->skip_frame = AVDISCARD_DEFAULT;
-timediff = av_gettime();
-if(sc->videostream != -1)
-avcodec_flush_buffers(sc->videoctx);
-if(sc->audiostream != -1)
-avcodec_flush_buffers(sc->audioctx);
-//avio_flush(sc->pFormatCtx->pb);
-timediff = av_gettime() - timediff;
-cout <<"Time Taken for flushing LibAV buffers:"<<timediff<<endl;
 
 /// Flush Internel Buffers
 //int old_audio_buffer_size = sc->audiobuffer.size();
@@ -249,7 +298,7 @@ sc->lastvideopts = videopts;
 ////////////
 
 videokeyframe = packet.flags;
-//cout <<"-- video pts:"<<videopts<<" - keyframe:"<<videokeyframe<<" - "<<(double)(packet.dts * sc->videobasetime)<<" - Size:"<<packet.size<<endl;
+cout <<"-- video pts:"<<videopts<<" - keyframe:"<<videokeyframe<<" - "<<(double)(packet.dts * sc->videobasetime)<<" - Size:"<<packet.size<<endl;
 if(videokeyframe == AV_PKT_FLAG_KEY && videopts >= 0){
 //cout <<" - Video Condition True - "<<endl; 
 firstpts = videopts;  
@@ -296,6 +345,7 @@ while(true){
 
  if(av_read_frame(sc->pFormatCtx, &packet)<0)
 break;
+
 if(packet.stream_index==sc->videostream){
 pthread_mutex_lock(&sc->videolock);
 sc->videobuffer.push(packet);
@@ -309,6 +359,10 @@ pthread_mutex_unlock(&sc->audiolock);
 }
 
 }
+
+  if(sc->audiobuffer.size() == 0)
+    break;
+
 
   }
 //break;
@@ -346,6 +400,7 @@ if(firstpts >= audiopts && audiokeyframe == AV_PKT_FLAG_KEY){}else{
 
 
 }
+
 timediff = av_gettime() - timediff;
 cout <<"Time Taken for flushing extra audio packets:"<<timediff<<endl;
 ///////////////////////////////////////////////////////////////////
@@ -420,18 +475,27 @@ av_free_packet(&packet);
 timediff = av_gettime() - timediff;
 cout <<"Time Taken for adding extra packets to buffer:"<<timediff<<endl;
 ///////////////////////////////////////////////////////////////////
-
+/*
 if(sc->networkstream){
 pthread_mutex_lock(&sc->demuxlock);
 sc->demux_block = 0;
 pthread_mutex_unlock(&sc->demuxlock);
 pthread_cond_broadcast(&sc->demuxcond);
 }
+*/
+
+pthread_mutex_lock(&sc->demuxpauselock);
+sc->demuxpausetoggle = 0;
+pthread_mutex_unlock(&sc->demuxpauselock);
+pthread_cond_broadcast(&sc->demuxpausecond); 
+
+
 
 pthread_mutex_lock(&sc->pauselock);
 sc->pausetoggle = 0;
 pthread_mutex_unlock(&sc->pauselock);
 pthread_cond_broadcast(&sc->pausecond);
+
 
 
 
@@ -462,7 +526,7 @@ if(sc->audiostream != -1)
 AVPacket packet;
 int stream_buffer = 0;
 //////
-int pause_over = 0;
+//int pause_over = 0;
 int yes_pause = 0;
 int fc = 0;
 //////
@@ -471,11 +535,7 @@ int max_videobuffer = 50;
 int max_audiobuffer = 50;
 int ret;
  //ret = av_read_frame(sc->pFormatCtx, &packet);
-empty_buffers(sc);
-if(sc->videostream != -1)
-avcodec_flush_buffers(sc->videoctx);
-if(sc->audiostream != -1)
-avcodec_flush_buffers(sc->audioctx);
+
 
 int mode = false;
 int mode1 = false;
@@ -550,7 +610,7 @@ if(sc->networkstream){
 int64_t timediff; 
 cout <<"Video Buffer:"<<sc->videobuffer.size()<<" - Audio Buffer:"<<sc->audiobuffer.size()<<endl;
 
-
+/*
 pthread_mutex_lock(&sc->demuxlock);
 if(sc->demux_block == 1){
 cout <<"Demuxer blocked..."<<endl;
@@ -561,6 +621,7 @@ sc->demuxpause = 0;
 cout <<"Demuxer unblocked..."<<endl;
 }
 pthread_mutex_unlock(&sc->demuxlock);
+*/
 
 /*
 if(sc->videobuffer.size() > 0){
@@ -571,6 +632,20 @@ if(sc->audiobuffer.size() > 0){
 pthread_cond_broadcast(&sc->decodecond);
 }  
 */
+
+pthread_mutex_lock(&sc->demuxpauselock);
+if(sc->demuxpausetoggle == 1){
+  cout <<"Demuxer blocked..."<<endl;
+
+//pthread_cond_broadcast(&sc->demux_waitcond);  
+sc->demuxpause = 1;
+pthread_cond_wait(&sc->demuxpausecond, &sc->demuxpauselock);
+sc->demuxpause = 0;
+//sc->demuxpausetoggle = 0;
+cout <<"Demuxer unblocked..."<<endl;
+
+}
+pthread_mutex_unlock(&sc->demuxpauselock);
 
 
 if(fc == 0){
@@ -644,7 +719,7 @@ if(sc->stop == 1){
 
 cout <<sc->audiopause<<" - "<<sc->videopause<<endl;
 //////////////////////////////////////////////
-pause_over = 1;
+//pause_over = 1;
 }
 
 
@@ -660,37 +735,34 @@ pthread_mutex_lock(&sc->pauselock);
 if(sc->videostream != -1 && sc->audiostream != -1){
 if(sc->audiopause == 1 && sc->videopause == 1){
 yes_pause = 1;
-}else{
-yes_pause = 0;
-pause_over = 0;
-//fc = 0;
-} 
+}
 }
 
 if(sc->videostream == -1){
 if(sc->audiopause == 1){
 yes_pause = 1;
-}else{
-yes_pause = 0;
-pause_over = 0;
-//fc = 0;
 } 
 }
 
 if(sc->audiostream == -1){
 if(sc->videopause == 1){
 yes_pause = 1;
-}else{
-yes_pause = 0;
-pause_over = 0;
-//fc = 0;
 } 
+}
+pthread_mutex_unlock(&sc->pauselock);
+
+mediaplayer_status status;
+pthread_mutex_lock(&sc->status_lock);
+status = sc->status;
+pthread_mutex_unlock(&sc->status_lock);
+
+if(status == MP_PLAYING){
+  fc = 0;
+  yes_pause = 0;
 }
 
 
-pthread_mutex_unlock(&sc->pauselock);
-
-cout <<"yes_pause:"<<yes_pause<<" - fc:"<<fc<<" - pause_over:"<<pause_over<<endl;
+cout <<"yes_pause:"<<yes_pause<<" - fc:"<<fc<<endl;
 
 if(sc->videostream != -1 && sc->audiostream != -1)
 mode1 = (sc->audiobuffer.size() > 300 && sc->videobuffer.size() > 300); 
@@ -701,7 +773,7 @@ mode1 = (sc->audiobuffer.size() > 300);
 if(sc->audiostream == -1)
 mode1 = (sc->videobuffer.size() > 300); 
 
-if(yes_pause == 1 && fc == 1 && mode1 && pause_over == 1){
+if(yes_pause == 1 && fc == 1 && mode1){
 
 // Send single to all threads to unpause
 pthread_mutex_lock(&sc->pauselock);
@@ -709,11 +781,13 @@ sc->pausetoggle = 0;
 pthread_mutex_unlock(&sc->pauselock);
 pthread_cond_broadcast(&sc->pausecond);
 // reset master clock to the stored time before pause
+
 while(true){
 if(sc->audiopause == 0 && sc->videopause == 0)
   break;
 av_usleep(1);
 }
+
 cout <<"------------------"<<endl;
 cout <<"Buffering Done...."<<endl;
 cout <<"------------------"<<endl;
@@ -722,7 +796,7 @@ sc->masterclock->reset();
 //sc->status = MP_PLAYING;
 put_status(MP_PLAYING,sc);
 yes_pause = 0; 
-pause_over = 0;
+//pause_over = 0;
   fc = 0;
 }
 
@@ -742,17 +816,16 @@ mode2 = (sc->videobuffer.size() > 500);
 
 
 if(mode2){
-
+fc = 0;
 av_read_pause(sc->pFormatCtx);
 pthread_mutex_lock(&sc->demuxlock);
-sc->demuxpause = 1;
-pthread_cond_broadcast(&sc->demux_waitcond);  
+//sc->demuxpause = 1;
+//pthread_cond_broadcast(&sc->demux_waitcond);  
 pthread_cond_wait(&sc->demuxcond, &sc->demuxlock);
-sc->demuxpause = 0;
+//sc->demuxpause = 0;
 pthread_mutex_unlock(&sc->demuxlock);
 av_read_play(sc->pFormatCtx); 
   //yes_pause = 0;
-
 }
 
 
@@ -775,20 +848,32 @@ av_read_play(sc->pFormatCtx);
 
 
 
+
 if(sc->audiobuffer.size() > max_audiobuffer || sc->videobuffer.size() > max_videobuffer){
+//cout <<"Demuxer Paused..."<<endl;
 
-pthread_mutex_lock(&sc->demuxlock);
-sc->demuxpause = 1;
-pthread_cond_broadcast(&sc->demux_waitcond);  
+pthread_mutex_lock(&sc->demuxlock);  
 pthread_cond_wait(&sc->demuxcond, &sc->demuxlock);
-sc->demuxpause = 0;
 pthread_mutex_unlock(&sc->demuxlock);
-
+//cout <<"Demuxer unPaused..."<<endl;
 //pthread_cond_broadcast(&sc->decodecond1); 
 //pthread_cond_broadcast(&sc->decodecond); 
-
-
 }
+
+
+pthread_mutex_lock(&sc->demuxpauselock);
+if(sc->demuxpausetoggle == 1){
+//pthread_cond_broadcast(&sc->demux_waitcond);  
+cout <<"Demuxer Paused..."<<endl;
+sc->demuxpause = 1;
+pthread_cond_wait(&sc->demuxpausecond, &sc->demuxpauselock);
+sc->demuxpause = 0;
+//sc->demuxpausetoggle = 0;
+cout <<"Demuxer unPaused..."<<endl;
+}
+pthread_mutex_unlock(&sc->demuxpauselock);
+
+
 
 
 }
@@ -801,11 +886,11 @@ pthread_mutex_unlock(&sc->demuxlock);
 }
 
 sc->endthread = 1;
-
-
+//sc->demuxpause == 0;
+/*
 int j = 0;
 while(true){
-
+cout <<"loop jam..."<<endl;
 pthread_mutex_lock(&sc->end_status_lock1);
 if(sc->end_audiothread == 1)
 j = j + 1;
@@ -829,6 +914,12 @@ pthread_cond_broadcast(&sc->decodecond);
 pthread_cond_broadcast(&sc->decodecond1);
 pthread_cond_broadcast(&sc->pausecond);
 }
+*/
+
+pthread_cond_broadcast(&sc->decodecond);
+pthread_cond_broadcast(&sc->decodecond1);
+pthread_cond_broadcast(&sc->pausecond);
+
 
 void *exit;
 
