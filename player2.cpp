@@ -1,5 +1,5 @@
 
-
+//test_gprof.c
 
 
 #include "mediaplayer.h"
@@ -98,15 +98,16 @@ void video_init(void **data,int *linesize,void * opaque){
    ctx *c = (ctx *)opaque;
 //c->image->data = (char *)data[0];
 
-c->image->data = (char *)data[0];
+//data = (void **)&c->image->data;
+//c->image->data = (char *)data[0];
 
 //data[0] = c->image->data[0];
 //data[1] = c->image->data[1];
 //data[2] = c->image->data[2];
-
-linesize[0] = c->image->pitches[0];
-linesize[1] = c->image->pitches[1];
-linesize[2] = c->image->pitches[2];
+//linesize = c->image->pitches;
+//linesize[0] = c->image->pitches[0];
+//linesize[1] = c->image->pitches[1];
+//linesize[2] = c->image->pitches[2];
 
 
 cout <<"pitches:"<<c->image->pitches[0]<<" - "<<c->image->pitches[1]<<" - "<<c->image->pitches[2]<<endl;
@@ -140,12 +141,27 @@ done = 1;
 }
 
 
-void video_callback(void * hardware_context,void **data , double pts,void * opaque){
+void video_callback(void * hardware_context,void **data,int *linesize , double pts,void * opaque){
   ctx *c = (ctx *)opaque;
 
 
 if(hardware_context == NULL){
+if(linesize[0] != c->image->pitches[0] || linesize[1] != c->image->pitches[1] || linesize[2] != c->image->pitches[2]){
+//  cout <<"Linesize Different..."<<endl;
+int y;
+for(y = 0; y < c->height;y++){
+memcpy(c->image->data+(y * c->image->pitches[0]),(char *)data[0] + (y * linesize[0]),c->image->pitches[0]);
+memcpy((c->image->data+c->image->offsets[1])+(y/2 * c->image->pitches[1]),(char *)data[1] + (y/2 * linesize[1]),c->image->pitches[1]);
+memcpy((c->image->data+c->image->offsets[2])+(y/2 * c->image->pitches[2]),(char *)data[2] + (y/2 * linesize[2]),c->image->pitches[2]);
+}
+
+}else{
+c->image->data = (char *)data[0];  
+}
 XvPutImage( c->display, c->port, c->window, c->gc, c->image, 0, 0, c->image->width, c->image->height, 0, 0, c->new_width, c->new_height);
+
+
+//cout <<"New Image Size:"<<c->image->height<<" - "<<c->image->width<<endl;
 hw_accel = 0;
 }else{
 hw_accel = 1;
@@ -182,17 +198,6 @@ vaPutSurface(va_dpy, id, window,
 //          sc->videoctx->height, sc->videoctx->width,
 //          0, 0);
 //  }
-
-
-
-
-
-
-//cout <<"context_id = "<<vc->context_id<<endl;
-//cout <<"------------------------------------"<<endl;
-//cout <<"display:"<<sc->x11_dpy<<endl;
-//XSync(sc->x11_dpy,false);
-//XFlush(sc->x11_dpy);
 
 //////////////// Video Acceleration ////////////////
 }
@@ -533,9 +538,9 @@ c.audio_format->byte_format = AO_FMT_NATIVE;
   c.pen = XCreateGC(display, window, GCForeground|GCLineWidth|GCLineStyle,&c.values);
 char *pixels;
 
-c.image = (XvImage *)XvCreateImage(display, port, format, pixels, width, height);
-//pixels = (char *)malloc(sizeof(char) * c.image->data_size);
-
+c.image = (XvImage *)XvCreateImage(display, port, format, NULL, width, height);
+pixels = (char *)malloc(sizeof(char) * c.image->data_size);
+c.image->data = pixels;
 c.device = ao_open_live(default_driver, c.audio_format, NULL);
   if (c.device == NULL) {
   cout <<"Sound Error..."<<endl;

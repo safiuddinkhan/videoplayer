@@ -32,10 +32,12 @@ cout <<"--------------------------------------------------------------------"<<e
 
 
 for(i = 0;fmt[i] != AV_PIX_FMT_NONE;i++){
+ 
 cout <<"Supported Pixel Formats:"<<fmt[i]<<endl;
 if (fmt[i] != PIX_FMT_VAAPI_VLD)
 continue;
 
+/*
 switch (s->codec_id) {
 case CODEC_ID_MPEG2VIDEO:
 profile = VAProfileMPEG2Main;
@@ -62,7 +64,7 @@ default:
 profile = -1;
 break;
 }
-
+*/
 
 if (profile >= 0) {
 /*
@@ -369,7 +371,7 @@ strcpy(url,path);
 //}
 
 AVDictionary *options = NULL;
-av_dict_set(&options, "video_size", "640x480", 0);
+//av_dict_set(&options, "video_size", "640x480", 0);
 //av_dict_set(&options, "pixel_format", "rgb24", 0);
 
 
@@ -452,8 +454,9 @@ avcodec_open2(sc->videoctx, pCodec,NULL);
 //// If no png then open codec normally 
 
 sc->videoctx = sc->pFormatCtx->streams[i]->codec; 
-
+cout <<"Original Height:"<<sc->pFormatCtx->streams[sc->videostream]->codec->height<<" - Original Width:"<<sc->videoctx->width<<endl;
 /////////////////// Hardware Acceleration ///////////////////
+
 switch (sc->videoctx->codec_id) {
 case CODEC_ID_MPEG2VIDEO:
 profile = VAProfileMPEG2Main;
@@ -502,6 +505,7 @@ if(va_status == VA_STATUS_SUCCESS){
 
  if (vld_entrypoint == num_entrypoints) {
       cout <<"VLD entrypoint not found..."<<endl;
+      
     }else{
       cout <<"VLD entrypoint located at:"<<vld_entrypoint<<endl;
 sc->videoctx->get_format = get_format_vaapi;
@@ -723,15 +727,6 @@ void init_all(){
  
 }
 
-video *mediaplayer::next_videoframe(){
-
-
-}
-
-audio *mediaplayer::next_audioframe(){
-
-
-}
 
 metadata_entry *mediaplayer::get_metadata(){
 
@@ -775,9 +770,6 @@ sc->audiostream =-1;
 //sc->videoctx = avcodec_alloc_context3(NULL);
 
 sc->masterclock = new media_clock(); 
-sc->aout = new audio();
-sc->vout = new video();
-//sc->vout1 = new video();
 
 //is_network_stream = 0;
 sc->networkstream = 0;
@@ -856,6 +848,7 @@ put_status(MP_ERROR,sc);
 ////////////////////////////////////////////////////////////////////////
 
 cout <<"Source Pixel Format:"<<sc->videoctx->pix_fmt<<endl;
+cout <<"Destination Pixel Format:"<<dstfmt<<endl;
 numBytes=avpicture_get_size(dstfmt ,width,height);
 cout <<"Size of Video Buffer:"<<numBytes<<endl;
 sc->vidbuffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
@@ -863,11 +856,9 @@ avpicture_fill((AVPicture *)sc->vidframe1, sc->vidbuffer, dstfmt ,width, height)
 
 //mm = mp;
 cout <<" ---- "<<sc->videoctx->pix_fmt<<" - "<<sc->videoctx->height<<" - "<<sc->videoctx->width<<endl;
-
 sc->convert_ctx = sws_getContext(width, height, sc->videoctx->pix_fmt,
                                    width, height,dstfmt,
                                    SWS_BICUBIC, NULL, NULL, NULL );
-
 
 //sc->vout->data = sc->vidframe1->data;
 //sc->vout->linesize = sc->vidframe1->linesize; 
@@ -884,7 +875,7 @@ sc->convert_ctx = sws_getContext(width, height, sc->videoctx->pix_fmt,
 
 }
 
-void mediaplayer::set_callbacks(void  (*init_video)(void ** , int * , void *) , void (*video_callback)(void *,void **,double , void *),void (*audio_callback)(uint8_t *,int , double , void *),void * opaque){
+void mediaplayer::set_callbacks(void  (*init_video)(void ** , int * , void *) , void (*video_callback)(void *,void **,int *,double , void *),void (*audio_callback)(uint8_t *,int , double , void *),void * opaque){
 sc->window = window;
 sc->pix = pix;
 sc->gc = gc;
@@ -992,7 +983,7 @@ sc->audio_flag = 0;
 sc->end_audiothread = 0;
 sc->end_videothread = 0;
 sc->demuxpausetoggle = 0;
-
+sc->fc = 0;
 
 //sc->masterclock->settime(sc->start_time); 
 //sc->masterclock->reset();
@@ -1023,13 +1014,15 @@ cout <<"Seeking not supported for this video..."<<endl;
 }
 }
 
-  pthread_create(&sc->demuxerthread,NULL,demuxer,sc);
 
 if(sc->videostream != -1 || sc->attachedimage == 1)
   pthread_create(&sc->videothread,NULL,videoplayback,sc);  
  
+
 if(sc->audiostream != -1)
   pthread_create(&sc->audiothread,NULL,audioplayback,sc); 
+
+  pthread_create(&sc->demuxerthread,NULL,demuxer,sc);
 
 
 
@@ -1070,7 +1063,7 @@ pthread_cond_broadcast(&sc->decodecond);
 if(sc->audiostream != -1)
 pthread_join(sc->audiothread,&exit);  
 
-if(sc->videostream != -1)
+if(sc->videostream != -1 || sc->attachedimage == 1)
 pthread_join(sc->videothread,&exit);  
 
 //sc->status = MP_STOP;
@@ -1287,8 +1280,6 @@ pthread_mutex_unlock(&sc->status_lock);
 mediaplayer::~mediaplayer(){
 delete(sc->masterclock);
 sws_freeContext (sc->convert_ctx);
-delete(sc->aout);
-delete(sc->vout);
 av_free(sc->vidframe1);
 //av_free(sc->vidframe);
 av_freep(&sc->vidbuffer); 

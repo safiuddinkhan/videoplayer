@@ -42,24 +42,31 @@ if(sc->videobuffer.size() == 0){
 
 sc->video_flag = 1;
 
-if(sc->endthread == 1){
+
+if(sc->endthread == 1 && sc->videobuffer.size() == 0){
   cout <<" Video Decoding Ended..."<<endl;
 return -1;
 }
 
+if(sc->pausetoggle == 1){
+return -2;  
+}
+
 
 //cout <<"I am here.."<<endl;
+if(sc->endthread != 1){
 pthread_mutex_lock(&sc->decodelock1);
 pthread_cond_wait(&sc->decodecond1, &sc->decodelock1);
 pthread_mutex_unlock(&sc->decodelock1);
 pthread_cond_signal(&sc->demuxcond);
+}
 //cout <<"I have crossed this..."<<endl;
+
 
 if(sc->endthread == 1 && sc->videobuffer.size() == 0){
   cout <<" Video Decoding Ended..."<<endl;
 return -1;
 }  
-
 
 if(sc->stop == 1){
 cout <<"Stop Signal Received by Video Thread..."<<endl;
@@ -179,7 +186,6 @@ SDL_UnlockYUVOverlay(surf);
 
 
 while(true){
-
 videopause:
 pthread_mutex_lock(&sc->pauselock);
 if(sc->pausetoggle == 1){
@@ -195,9 +201,9 @@ cout <<"Video Thread unPaused..."<<endl;
 pthread_mutex_unlock(&sc->pauselock);
 
 
-
 ret = getdecodedvideoframe(sc,vidframe);
 //cout <<"Video Decoder Status:"<<ret<<endl;
+
 
 if(ret == -1){
 break;
@@ -205,8 +211,12 @@ break;
 goto videopause;
 }else if(ret == 0){
 
+//cout <<"I was here..."<<endl;
 if(sc->videoctx->hwaccel_context == NULL){
+
+//cout <<"I was here1..."<<endl;
 sws_scale(sc->convert_ctx,vidframe->data,vidframe->linesize,0,vidframe->height,sc->vidframe1->data,sc->vidframe1->linesize);
+//cout <<"I was here2..."<<endl;
 }
 //cout <<"Hello..."<<endl;
 sc->videopts = (double)av_frame_get_best_effort_timestamp(vidframe) * (double)sc->videobasetime;
@@ -229,6 +239,7 @@ sc->video_flag = 0;
 
 
 if(fc == 0){
+if(sc->fc == 0){
 if(sc->videopts < 0){
 sc->masterclock->settime(sc->start_time);	
 }else{	
@@ -236,7 +247,10 @@ sc->masterclock->settime(sc->videopts);
 cout <<"videopts:"<<sc->videopts<<endl;
 }
 sc->masterclock->reset();
+}
+
 fc = 1;
+sc->fc = 1;
 ts_diff = 0;
 }else{
 ts_diff = av_compare_ts(av_frame_get_best_effort_timestamp(vidframe),sc->pFormatCtx->streams[sc->videostream]->time_base,sc->masterclock->gettime() * AV_TIME_BASE,AV_TIME_BASE_Q);
@@ -315,8 +329,13 @@ cout <<"display:"<<sc->x11_dpy<<endl;
 //XFlush(sc->x11_dpy);
 */
 //////////////// Video Acceleration ////////////////
+if(sc->videoctx->hwaccel_context == NULL){
+sc->video_callback(sc->videoctx->hwaccel_context,(void**)sc->vidframe1->data,sc->vidframe1->linesize,sc->videopts,sc->opaque);
+}else{
+sc->video_callback(sc->videoctx->hwaccel_context,(void**)vidframe->data,vidframe->linesize,sc->videopts,sc->opaque);
+}
 
-sc->video_callback(sc->videoctx->hwaccel_context,(void**)vidframe->data,sc->videopts,sc->opaque);
+
 //cout <<"Delay:"<<delay<<" - Duration:"<<duration<<endl;
 
 /*

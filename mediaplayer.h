@@ -130,8 +130,6 @@ double start_time;
 int is_seekable;
 //uint8_t *audiodata;
 //int audiopacketsize;
-audio *aout;
-video *vout;
 //video *vout1;
 
 AVPixelFormat pixelformat;
@@ -156,10 +154,11 @@ int videosync;
 
 SwsContext * convert_ctx;
 AVFrame *vidframe1;
+int fc;
 //AVFrame *vidframe;
 uint8_t *vidbuffer;
 void * opaque;
-void (*video_callback)(void * ,void ** , double , void *);
+void (*video_callback)(void * ,void ** ,int *, double , void *);
 void (*audio_callback)(uint8_t *,int , double , void *);
 Display *x11_dpy;
 VASurfaceID surface_id;
@@ -206,14 +205,10 @@ Pixmap pix;
 GC gc;
 stream_type streamtype;
 mediaplayer(char *file,char *fourcc_code,Display *display);
-audio *get_playback_audioframe();
-//virtual void video_callback();
 
 
-void set_callbacks(void  (*init_video)(void ** , int * , void *) , void (*video_callback)(void *,void ** , double , void *),void (*audio_callback)(uint8_t *,int , double , void *),void * opaque);
+void set_callbacks(void  (*init_video)(void ** , int * , void *) , void (*video_callback)(void *,void ** ,int *, double , void *),void (*audio_callback)(uint8_t *,int , double , void *),void * opaque);
 
-video *next_videoframe();
-audio *next_audioframe();
 
 int play();
 int stop();

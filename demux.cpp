@@ -508,7 +508,11 @@ cout <<"---------------------------------------------------------"<<endl;
 }
 
 
-
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////
 
 // Demuxer
 
@@ -546,28 +550,13 @@ av_read_play(sc->pFormatCtx);
 
 while(true){
 
-/*
-if(bufferclock->gettime() < 4 || sc->pausetoggle == 1){
-cout <<"Buffer Clock:"<<bufferclock->gettime()<<" - Buffer Size:"<<sc->videobuffer.size()<<" - "<<sc->audiobuffer.size()<<endl;
-}
-
-if(bufferclock->gettime() > 4 && fc == 0){
-if(sc->videostream != -1)
-  pthread_create(&sc->videothread,NULL,videoplayback,sc);  
- 
-if(sc->audiostream != -1)
-  pthread_create(&sc->audiothread,NULL,audioplayback,sc); 
-
-fc = 1;
-}
-*/
-
-
 if(sc->stop == 1){
   break;
 }
 
 //int ret;
+
+
 
  ret = av_read_frame(sc->pFormatCtx, &packet);
 //cout <<"read frame out:-"<<ret<<" - "<<sc->pFormatCtx->pb->error<<endl;
@@ -577,12 +566,14 @@ if(sc->pFormatCtx->pb->error != 0){
 }
 
 
+
 if(ret < 0) 
 break;
 
+
+
   
 if(packet.stream_index==sc->videostream){
-
 pthread_mutex_lock(&sc->videolock);
 sc->videobuffer.push(packet);
 pthread_mutex_unlock(&sc->videolock);
@@ -861,6 +852,8 @@ pthread_mutex_unlock(&sc->demuxlock);
 }
 
 
+
+
 pthread_mutex_lock(&sc->demuxpauselock);
 if(sc->demuxpausetoggle == 1){
 //pthread_cond_broadcast(&sc->demux_waitcond);  
@@ -884,6 +877,8 @@ pthread_mutex_unlock(&sc->demuxpauselock);
 
 
 }
+
+
 
 sc->endthread = 1;
 //sc->demuxpause == 0;
@@ -927,7 +922,7 @@ void *exit;
 if(sc->audiostream != -1)
 pthread_join(sc->audiothread,&exit);  
 
-if(sc->videostream != -1)
+if(sc->videostream != -1 || sc->attachedimage == 1)
 pthread_join(sc->videothread,&exit);  
 //sc->stop = 1;
 

@@ -34,7 +34,7 @@ if(sc->audiobuffer.size() == 0){
 
 sc->audio_flag = 1;
 
-if(sc->endthread == 1){
+if(sc->endthread == 1  && sc->audiobuffer.size() == 0){
   cout <<" Audio Decoding Ended..."<<endl;
  return -1;
 }
@@ -44,10 +44,12 @@ return -2;
 }
 
  // cout << "start..."<<endl;
+if(sc->endthread != 1){
 pthread_mutex_lock(&sc->decodelock);
 pthread_cond_wait(&sc->decodecond, &sc->decodelock);
 pthread_mutex_unlock(&sc->decodelock);
 pthread_cond_signal(&sc->demuxcond);
+}
  // cout <<"end..."<<endl;
 
 if(sc->stop == 1){
@@ -206,13 +208,17 @@ sc->audio_flag = 0;
 ///////////////////////////////////////////////////////////////////
 
 if(fc == 0){
+
+if(sc->fc == 0){  
 if(sc->audiopts < 0){
 sc->masterclock->settime(sc->start_time); 
 }else{  
 sc->masterclock->settime(sc->audiopts); 
 }
 sc->masterclock->reset();
+}
  fc = 1;
+ sc->fc = 1;
 ts_diff = 0;
 }else{
 ts_diff = av_compare_ts(av_frame_get_best_effort_timestamp(audioframe),sc->pFormatCtx->streams[sc->audiostream]->time_base,sc->masterclock->gettime() * AV_TIME_BASE,AV_TIME_BASE_Q);
