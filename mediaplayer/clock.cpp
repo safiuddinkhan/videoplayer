@@ -1,4 +1,9 @@
-#include "common.h"
+#include "clock.h"
+extern "C" {
+#include <libavutil/time.h>
+#include <libavutil/avutil.h>	
+}
+
 
 media_clock::media_clock(){
 itime = av_gettime();

@@ -1,12 +1,9 @@
-#include "mediaplayer.h"
+#include "internels.h"
 #include <ao/ao.h>
 
-/// Pause Audio Callback
-void mediaplayer::audio_pause_callback(int toggle){
 
-}
 
-int mediaplayer::getdecodedaudioframe(stream_context *sc,AVFrame *audioframe){
+int internel_decoder::getdecodedaudioframe(stream_context *sc,AVFrame *audioframe){
 AVPacket packet;
 int audioframefinished;
 int len;
@@ -22,6 +19,7 @@ int len;
 
 
 pthread_cond_signal(&sc->demuxcond);
+
 
 if(sc->stop == 1){
 cout <<"Stop Signal Received by Audio Thread..."<<endl;
@@ -93,7 +91,7 @@ return 0;
 return 1;
 }
 //audio thread
-void *mediaplayer::audioplayback(void *arg){
+void *internel_decoder::audioplayback(void *arg){
 stream_context *sc = (stream_context *)arg;
   
 
@@ -184,6 +182,7 @@ break;
 }else if(ret == -2){
 goto audiopos;
 }else if(ret == 0){
+ // cout <<"Hello1...1"<<endl;
 //timediff = av_gettime() - timediff;
 
 //if(fc == 2){
@@ -209,21 +208,22 @@ sc->audio_flag = 0;
 
 if(fc == 0){
 
-if(sc->fc == 0){  
+//if(sc->fc == 0){  
 if(sc->audiopts < 0){
 sc->masterclock->settime(sc->start_time); 
 }else{  
 sc->masterclock->settime(sc->audiopts); 
 }
 sc->masterclock->reset();
-}
+//}
  fc = 1;
- sc->fc = 1;
+// sc->fc = 1;
 ts_diff = 0;
 }else{
 ts_diff = av_compare_ts(av_frame_get_best_effort_timestamp(audioframe),sc->pFormatCtx->streams[sc->audiostream]->time_base,sc->masterclock->gettime() * AV_TIME_BASE,AV_TIME_BASE_Q);
 }
 
+//  cout <<"Hello2...1"<<endl;
 
 delay = (sc->audiopts - sc->masterclock->gettime()) * AV_TIME_BASE;
 
@@ -246,14 +246,22 @@ ts_diff = -1;
 
 
 if(ts_diff == -1){
+ // cout <<"Hello4...1"<<endl;
+
 //delay = 0;
 pthread_yield();
 cout <<"Audio Frame Dropped..."<<endl;
+
+if(sc->streamtype == stream_livesource){
+sc->masterclock->settime(sc->audiopts);
+sc->masterclock->reset();
+}
+
 }else{
 
 
 //if(sc->videostream == -1){
-//  cout <<"Video PTS:"<<sc->videopts<<" - Audio PTS:"<<sc->audiopts<<" - Master Clock:"<<sc->masterclock->gettime()<<" | "<<sc->audiobuffer.size()<<" - "<<sc->videobuffer.size()<<endl;  
+ // cout <<"Video PTS:"<<sc->videopts<<" - Audio PTS:"<<sc->audiopts<<" - Master Clock:"<<sc->masterclock->gettime()<<" | "<<sc->audiobuffer.size()<<" - "<<sc->videobuffer.size()<<endl;  
 //}
 
 
@@ -275,17 +283,17 @@ if(ret < 0){
 }
 
 
-
+ // cout <<"Hello5...1"<<endl;
 
 if(delay < 0)
 delay = 0;
 av_usleep(delay);
- 
+// cout <<"Hello6...1"<<endl;
 //sc->status = MP_PLAYING;
 //ao_play(device, (char *)dst_data, ret*curr_ch*(format->bits/8));
 
 sc->audio_callback(dst_data,ret,sc->audiopts,sc->opaque);
-
+//cout <<"Hello7...1"<<endl;
 //pthread_mutex_lock(&sc->audio_seek_status_lock);
 if(sc->audioseek == 1){
   sc->audioseek = 0;
@@ -347,11 +355,4 @@ avcodec_flush_buffers(sc->audioctx);
 pthread_exit(NULL);  
 }
 
-/*
-audio *mediaplayer::get_playback_audioframe(){
-pthread_mutex_lock(&sc->audioframelock);
-pthread_cond_wait(&sc->audioframeupdate, &sc->audioframelock);
-pthread_mutex_unlock(&sc->audioframelock);
-return sc->aout;
-}
-*/
+

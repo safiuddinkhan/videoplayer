@@ -1,5 +1,5 @@
 
-//test_gprof.c
+
 
 
 #include "mediaplayer.h"
@@ -16,6 +16,10 @@
 //#include <SDL/SDL.h>
 #include <pthread.h>
 #include <ao/ao.h>
+
+#include <va/va.h>
+#include <va/va_x11.h>
+
 
 
 int done = 0;
@@ -48,6 +52,12 @@ double videopts;
   GC pen;
   XGCValues values;
   XFontStruct *font;
+VAImage *va_image;
+VAImageFormat *va_format;
+VASurfaceID surface_id;
+VADisplay *va_dpy;
+uint8_t *vidbuffer;
+
 };
 
 
@@ -94,71 +104,63 @@ pthread_exit(NULL);
 //uint8_t **video_data
 
 
-void video_init(void **data,int *linesize,void * opaque){
-   ctx *c = (ctx *)opaque;
-//c->image->data = (char *)data[0];
 
-//data = (void **)&c->image->data;
-//c->image->data = (char *)data[0];
-
-//data[0] = c->image->data[0];
-//data[1] = c->image->data[1];
-//data[2] = c->image->data[2];
-//linesize = c->image->pitches;
-//linesize[0] = c->image->pitches[0];
-//linesize[1] = c->image->pitches[1];
-//linesize[2] = c->image->pitches[2];
-
-
-cout <<"pitches:"<<c->image->pitches[0]<<" - "<<c->image->pitches[1]<<" - "<<c->image->pitches[2]<<endl;
-cout <<"linesize:"<<linesize[0]<<" - "<<linesize[1]<<" - "<<linesize[2]<<endl;
-
-//c->image->offsets[1] = (data[1] - data[0]);
-/*
-c->image->width = c->width;
-c->image->height = c->height;
-
-c->image->pitches[0] = linesize[0];
-c->image->pitches[1] = linesize[1];
-c->image->pitches[2] = linesize[2];
-
-c->image->offsets[0] = 0;
-c->image->offsets[2] = linesize[0] * c->height;
-c->image->offsets[1] = ((linesize[1]/2) * c->height) + (linesize[0] * c->height);
-
-c->image->data_size = ((linesize[2]/2) * c->height) + ((linesize[1]/2) * c->height) + (linesize[0] * c->height);
-*/
-/*
-cout <<c->image->offsets[0]<<endl;
-cout <<c->image->offsets[1]<<endl;
-cout <<c->image->offsets[2]<<endl;
-
-cout <<"data size:"<<c->image->data_size<<endl;
-cout <<"calculated data size:"<<(linesize[0] * c->height + linesize[1] * c->height + linesize[2] * c->height)<<endl;
-cout <<"new width:"<<c->image->width<<" - new height:"<<c->image->height<<endl;
-*/
-done = 1;
-}
 
 
 void video_callback(void * hardware_context,void **data,int *linesize , double pts,void * opaque){
   ctx *c = (ctx *)opaque;
-
-
+//cout <<"Total Duration:"<<mp->getduration()<<endl;
 if(hardware_context == NULL){
+cout <<linesize[0]<<" - "<<linesize[1]<<" - "<<linesize[2]<<endl;
+cout <<c->va_image->pitches[0]<<" - "<<c->va_image->pitches[1]<<" - "<<c->va_image->pitches[2]<<endl;
+/*
 if(linesize[0] != c->image->pitches[0] || linesize[1] != c->image->pitches[1] || linesize[2] != c->image->pitches[2]){
-//  cout <<"Linesize Different..."<<endl;
+  cout <<"Linesize Different..."<<endl;
+
 int y;
+cout <<c->height<<endl;
 for(y = 0; y < c->height;y++){
 memcpy(c->image->data+(y * c->image->pitches[0]),(char *)data[0] + (y * linesize[0]),c->image->pitches[0]);
 memcpy((c->image->data+c->image->offsets[1])+(y/2 * c->image->pitches[1]),(char *)data[1] + (y/2 * linesize[1]),c->image->pitches[1]);
 memcpy((c->image->data+c->image->offsets[2])+(y/2 * c->image->pitches[2]),(char *)data[2] + (y/2 * linesize[2]),c->image->pitches[2]);
+
 }
 
+memcpy(c->vidbuffer,c->image->data,c->image->data_size);
+
 }else{
-c->image->data = (char *)data[0];  
+memcpy(c->vidbuffer,data[0],c->va_image->data_size);
+
+//c->image->data = (char *)data[0];  
 }
-XvPutImage( c->display, c->port, c->window, c->gc, c->image, 0, 0, c->image->width, c->image->height, 0, 0, c->new_width, c->new_height);
+*/
+//memcpy(c->vidbuffer,data[0],c->va_image->data_size);
+cout <<"offset: "<<c->va_image->offsets[0]<<" - "<<c->va_image->offsets[1]<<" - "<<c->va_image->offsets[2]<<endl;
+cout <<"width:"<<c->va_image->width<<" - height:"<<c->va_image->height<<endl;
+
+//memcpy(c->vidbuffer,data[0],c->va_image->offsets[1]);
+//memcpy(c->vidbuffer+c->va_image->offsets[1],data[1],c->va_image->offsets[2] - c->va_image->offsets[1]);
+//memcpy(c->vidbuffer+c->va_image->offsets[2],data[2],c->va_image->data_size - c->va_image->offsets[2]);
+
+//memcpy(c->vidbuffer,data[0],c->va_image->data_size);
+
+VAStatus va_status;
+va_status = vaSyncSurface(c->va_dpy, c->surface_id);
+if(va_status == VA_STATUS_SUCCESS){
+ //cout <<"Successful..."<<endl;
+}
+
+
+va_status = vaPutImage (c->va_dpy,c->surface_id,c->va_image->image_id,0,0,c->width,c->height,0,0,c->width,c->height);
+
+vaPutSurface(c->va_dpy, c->surface_id, window,
+                        0, 0,
+                        c->width, c->height,
+                        0, 0,
+                        c->new_width, c->new_height,
+                        NULL, 0,
+                        VA_FRAME_PICTURE);
+//XvPutImage( c->display, c->port, c->window, c->gc, c->image, 0, 0, c->image->width, c->image->height, 0, 0, c->new_width, c->new_height);
 
 
 //cout <<"New Image Size:"<<c->image->height<<" - "<<c->image->width<<endl;
@@ -167,29 +169,37 @@ hw_accel = 0;
 hw_accel = 1;
 //////////////// Video Acceleration //////////////// 
 
+
+VASurfaceID id = (VASurfaceID)(uintptr_t)data[0];
+
+
+//VADisplay va_dpy;
 VAStatus va_status;
-VAConfigID config_id;
-VAContextID context_id;
-VADisplay va_dpy;
-//cout <<"test1"<<endl;
-vaapi_context *vc = (vaapi_context*)hardware_context;
-va_dpy = vc->display;
-//cout <<"test2"<<endl;
-VASurfaceID id = (VASurfaceID)(uintptr_t)data[3];
-//cout <<"test4"<<endl;
-va_status = vaSyncSurface(va_dpy, id);
-//cout <<"test5"<<endl;
+//vaapi_context *vc = (vaapi_context*)hardware_context;
+//va_dpy = vc->display;
+
+va_status = vaSyncSurface(c->va_dpy, id);
 if(va_status == VA_STATUS_SUCCESS){
- // cout <<"Successful..."<<endl;
+ //cout <<"Successful..."<<endl;
 }
 
-vaPutSurface(va_dpy, id, window,
+
+
+
+
+
+
+vaPutSurface(c->va_dpy, id, window,
                         0, 0,
                         c->width, c->height,
                         0, 0,
                         c->new_width, c->new_height,
                         NULL, 0,
                         VA_FRAME_PICTURE);
+
+
+
+
 //cout <<"test6"<<endl;
 
 //if(va_status == VA_STATUS_SUCCESS){
@@ -373,7 +383,12 @@ cout <<"Test Player"<<endl;
 init_all();
 
 pthread_cond_init (&threadcontrol, NULL);
-mp = new mediaplayer(argv[1],(char *)"YV12",display);
+//mp = new mediaplayer(argv[1],(char *)"YV12",display);
+
+void *disp = (void *)init_vaapi(display);
+
+mp = new mediaplayer(argv[1],disp);
+
 /*
 switch(mp->streamtype){
 case stream_network:
@@ -492,7 +507,7 @@ cout <<"Error could not load the fonts"<<endl;
     //if ( xvColorKey != None ) {
     XSetForeground( display, gc, colourkey );
     XFillRectangle( display, window, gc, 0, 0, width, height );
-    cerr << "Filled " << width << 'x' << height << "-rectangle with colour "
+    cerr << "` " << width << 'x' << height << "-rectangle with colour "
          << colourkey << '.' << endl;
   //}
 
@@ -536,11 +551,11 @@ c.audio_format->byte_format = AO_FMT_NATIVE;
   c.values.line_width = 1;
   c.values.line_style = LineSolid;
   c.pen = XCreateGC(display, window, GCForeground|GCLineWidth|GCLineStyle,&c.values);
-char *pixels;
+//char *pixels;
 
-c.image = (XvImage *)XvCreateImage(display, port, format, NULL, width, height);
-pixels = (char *)malloc(sizeof(char) * c.image->data_size);
-c.image->data = pixels;
+//c.image = (XvImage *)XvCreateImage(display, port, format, NULL, width , height);
+//pixels = (char *)malloc(sizeof(char) * c.image->data_size);
+//c.image->data = pixels;
 c.device = ao_open_live(default_driver, c.audio_format, NULL);
   if (c.device == NULL) {
   cout <<"Sound Error..."<<endl;
@@ -562,11 +577,22 @@ c.device = ao_open_live(default_driver, c.audio_format, NULL);
 
 
 //Pixmap pix = XCreatePixmap(display, window, mp->height, mp->width, depth);
-mp->window = window;
+//mp->window = window;
 //mp->pix = pix;
 //mp->gc = gc;
+//////////////////////////////////////////////////////////////////////////////////////////////////
+c.va_dpy = (VADisplay *)disp; 
+c.va_format = get_vaformat(get_pixelformat(MP_YV12),(VADisplay *)disp);
 
-mp->set_callbacks(video_init,video_callback,audio_callback,&c);
+VAStatus va_status; 
+va_status = vaCreateSurfaces(c.va_dpy,VA_RT_FORMAT_YUV420,width,height,&c.surface_id, 1,NULL, 0);
+c.va_image = (VAImage *)malloc(sizeof(VAImage)); 
+va_status = vaCreateImage (c.va_dpy,c.va_format,width,height,c.va_image);
+//va_status = vaMapBuffer (c.va_dpy,c.va_image->buf,(void **)&c.vidbuffer);
+mp->va_image = c.va_image;
+//////////////////////////////////////////////////////////////////////////////////////////////////
+mp->set_pixel_format(MP_YV12);
+mp->set_callbacks(video_callback,audio_callback,&c);
 
 
 
@@ -613,9 +639,17 @@ if(done == 0){
 }
 //pthread_mutex_lock(&c.display_lock);
 if(hw_accel == 0){
-cout <<"No Hardware Acceleration Enabled..."<<endl;
-        XvPutImage( display, port, window, gc,
-                    c.image, 0, 0, width, height, 0, 0, c.new_width, c.new_height );
+vaPutSurface(c.va_dpy, c.surface_id, window,
+                        0, 0,
+                        c.width, c.height,
+                        0, 0,
+                        c.new_width, c.new_height,
+                        NULL, 0,
+                        VA_FRAME_PICTURE);
+//  cout <<"No Hardware Acceleration Enabled..."<<endl;
+ //       XvPutImage( display, port, window, gc,
+ //                   c.image, 0, 0, width, height, 0, 0, c.new_width, c.new_height );
+//
 }
 //pthread_mutex_unlock(&c.display_lock);
 
@@ -633,8 +667,10 @@ pthread_cond_broadcast(&threadcontrol);
      // break;
      // case KeyRelease:
         cerr << "Key was pressed:"<<event.xkey.keycode<<endl;
-       if ( event.xkey.keycode == 0x09 )
-          return 1;//
+       if ( event.xkey.keycode == 0x09 ){
+        delete(mp);
+          return 1;
+          }//
        //   quit = true;
 
 if ( event.xkey.keycode == 113 ){

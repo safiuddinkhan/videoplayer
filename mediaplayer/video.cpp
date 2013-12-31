@@ -1,11 +1,10 @@
-#include "mediaplayer.h"
-#include <SDL/SDL.h>
-
+#include "internels.h"
+//#include <SDL/SDL.h>
 
 // Video Threasd
 
 
-int mediaplayer::getdecodedvideoframe(stream_context *sc,AVFrame *vidframe){
+int internel_decoder::getdecodedvideoframe(stream_context *sc,AVFrame *vidframe){
 int vidframefinished;
 AVPacket packet;
 av_init_packet(&packet);
@@ -38,7 +37,9 @@ return -1;
 */
 
 //pthread_mutex_lock(&sc->videolock);
+
 if(sc->videobuffer.size() == 0){
+
 
 sc->video_flag = 1;
 
@@ -80,7 +81,6 @@ return -2;
 
 
 }
-
 
 
 //pthread_mutex_unlock(&sc->videolock);
@@ -140,10 +140,12 @@ return 1;
 }
 
 
-void *mediaplayer::videoplayback(void *arg){
+void *internel_decoder::videoplayback(void *arg){
 stream_context *sc = (stream_context *)arg;  
 AVFrame *vidframe = avcodec_alloc_frame(); 
-avcodec_get_frame_defaults (vidframe);
+//avcodec_get_frame_defaults (vidframe);
+
+
 ////////////////////////////////////////////////////////////////
 /*
 SDL_Overlay *surf;
@@ -183,7 +185,10 @@ SDL_UnlockYUVOverlay(surf);
 ////////////////////////////////////////////////////////////////
 
 //pthread_cond_broadcast(&sc->videoframeupdate);
-
+VAImage *image1;
+VASurfaceID surfaceid1;
+uint8_t *vidbuffer1;
+//vaapi_upload *va = new vaapi_upload((VADisplay*)sc->display);
 
 while(true){
 videopause:
@@ -211,13 +216,7 @@ break;
 goto videopause;
 }else if(ret == 0){
 
-//cout <<"I was here..."<<endl;
-if(sc->videoctx->hwaccel_context == NULL){
 
-//cout <<"I was here1..."<<endl;
-sws_scale(sc->convert_ctx,vidframe->data,vidframe->linesize,0,vidframe->height,sc->vidframe1->data,sc->vidframe1->linesize);
-//cout <<"I was here2..."<<endl;
-}
 //cout <<"Hello..."<<endl;
 sc->videopts = (double)av_frame_get_best_effort_timestamp(vidframe) * (double)sc->videobasetime;
 duration = ((double)av_frame_get_pkt_duration(vidframe) * (double)sc->videobasetime)* AV_TIME_BASE;
@@ -235,11 +234,14 @@ sc->video_flag = 0;
 ///////////////////////////////////////////////////////
 
 
-
+//if(sc->video_accel_mode == 1 && fc == 0){
+//if(va->init(vidframe->width,vidframe->height,sc->vaformat) == -1)
+//break;
+//}
 
 
 if(fc == 0){
-if(sc->fc == 0){
+//if(sc->fc == 0){
 if(sc->videopts < 0){
 sc->masterclock->settime(sc->start_time);	
 }else{	
@@ -247,10 +249,10 @@ sc->masterclock->settime(sc->videopts);
 cout <<"videopts:"<<sc->videopts<<endl;
 }
 sc->masterclock->reset();
-}
+//}
 
 fc = 1;
-sc->fc = 1;
+//sc->fc = 1;
 ts_diff = 0;
 }else{
 ts_diff = av_compare_ts(av_frame_get_best_effort_timestamp(vidframe),sc->pFormatCtx->streams[sc->videostream]->time_base,sc->masterclock->gettime() * AV_TIME_BASE,AV_TIME_BASE_Q);
@@ -278,6 +280,12 @@ ts_diff = -1;
 
 if(ts_diff == -1){
 cout <<"Video Frame Dropped..."<<endl;
+
+if(sc->streamtype == stream_livesource){
+sc->masterclock->settime(sc->videopts);
+sc->masterclock->reset();
+}
+
  pthread_yield();
 }else{
 
@@ -288,73 +296,33 @@ delay = 0;
 
 av_usleep(delay);
 //////////////// Video Acceleration //////////////// 
-/*
-VAStatus va_status;
-VAConfigID config_id;
-VAContextID context_id;
-VADisplay va_dpy;
+
+//////////////// Video Acceleration ////////////////
+
+
+if(sc->video_accel_mode == 0){
+sws_scale(sc->convert_ctx,vidframe->data,vidframe->linesize,0,vidframe->height,sc->vidframe1->data,sc->vidframe1->linesize);
+sc->video_callback(sc->videoctx->hwaccel_context,(void**)sc->vidframe1->data,sc->vidframe1->linesize,sc->videopts,sc->opaque);
+cout <<"coded width:"<<vidframe->linesize[0]<<" - coded height:"<<sc->videoctx->coded_height<<endl;
+
+//}else if(sc->video_accel_mode == 1){
+
+//surfaceid1 = va->upload(vidframe->extended_data);
+//vaapi_context *vc = new vaapi_context();
+//vc->display = sc->display;
+//printf("- Surface ID1: %04x\n",sc->surfaceid1);
+//printf("- VA Display1: %04x\n",sc->va_dpy);
+
+//sc->video_callback(vc,(void**)&surfaceid1,sc->vidframe1->linesize,sc->videopts,sc->opaque);
+
+}else if(sc->video_accel_mode == 1){
 
 vaapi_context *vc = (vaapi_context*)sc->videoctx->hwaccel_context;
-va_dpy = vc->display;
-VASurfaceID id = (VASurfaceID)(uintptr_t)vidframe->data[3];
-va_status = vaSyncSurface(va_dpy, id);
-if(va_status == VA_STATUS_SUCCESS){
-  cout <<"Successful..."<<endl;
-}
+sc->video_callback(sc->videoctx->hwaccel_context,(void**)vidframe->data,sc->vidframe1->linesize,sc->videopts,sc->opaque);
 
-vaPutSurface(va_dpy, id, sc->window,
-                        0, 0,
-                        sc->videoctx->width, sc->videoctx->height,
-                        0, 0,
-                        sc->videoctx->width, sc->videoctx->height,
-                        NULL, 0,
-                        VA_FRAME_PICTURE);
-
-if(va_status == VA_STATUS_SUCCESS){
-  cout <<"Done putsurface Successful..."<<endl;
-//  XCopyArea(sc->x11_dpy, sc->pix, sc->window, sc->gc, 0, 0,
-//          sc->videoctx->height, sc->videoctx->width,
-//          0, 0);
-  }
-
-
-
-
-
-
-
-cout <<"------------------------------------"<<endl;
-cout <<"display:"<<sc->x11_dpy<<endl;
-//XSync(sc->x11_dpy,false);
-//XFlush(sc->x11_dpy);
-*/
-//////////////// Video Acceleration ////////////////
-if(sc->videoctx->hwaccel_context == NULL){
-sc->video_callback(sc->videoctx->hwaccel_context,(void**)sc->vidframe1->data,sc->vidframe1->linesize,sc->videopts,sc->opaque);
-}else{
-sc->video_callback(sc->videoctx->hwaccel_context,(void**)vidframe->data,vidframe->linesize,sc->videopts,sc->opaque);
 }
 
 
-//cout <<"Delay:"<<delay<<" - Duration:"<<duration<<endl;
-
-/*
-sc->vout1->data = vidframe->data;
-sc->vout1->linesize = vidframe->linesize; 
-sc->vout1->pts = sc->videopts;
-if(sc->cc == NULL)
-sc->vout = sc->vout1;
-else
-sc->vout = sc->cc->convert(sc->vout1);
-*/
-
-
-
-
-//SDL_DisplayYUVOverlay(surf, &rect);
-//pthread_mutex_lock(&sc->videoframelock);
-
-//pthread_mutex_unlock(&sc->videoframelock);
 
 
 //pthread_mutex_lock(&sc->video_seek_status_lock);
@@ -397,8 +365,9 @@ sc->videoseek = 1;
 pthread_mutex_unlock(&sc->video_seek_status_lock);
 
 av_free(vidframe);
-
-
+//if(sc->video_accel_mode == 1){
+//delete(va);
+//}
 
 
 
