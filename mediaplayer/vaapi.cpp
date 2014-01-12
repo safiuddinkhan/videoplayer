@@ -172,10 +172,10 @@ if(va_status == VA_STATUS_SUCCESS){
   cout <<"Config ID found..."<<endl;
 }
 
-surface_id = (VASurfaceID *)malloc(sizeof(VASurfaceID)*16);
+surface_id = (VASurfaceID *)malloc(sizeof(VASurfaceID)*20);
 
 
-va_status = vaCreateSurfaces(va_dpy,va_format, avctx->width,avctx->height,surface_id, 16,NULL, 0);
+va_status = vaCreateSurfaces(va_dpy,va_format, avctx->width,avctx->height,surface_id, 20,NULL, 0);
 
 
 if(va_status == VA_STATUS_SUCCESS){
@@ -188,7 +188,7 @@ if(va_status == VA_STATUS_SUCCESS){
 
 va_status = vaCreateContext(va_dpy, config_id,avctx->coded_width,avctx->coded_height,VA_PROGRESSIVE,
                                surface_id,
-                               16,
+                               20,
                                &context_id);
 
 if(va_status == VA_STATUS_SUCCESS){
@@ -255,7 +255,7 @@ int vaapi::get_buffer(struct AVCodecContext *avctx, AVFrame *pic,int flags)
 VASurfaceID *surface_id = (VASurfaceID *)avctx->opaque;
 void *surface = (void *)(uintptr_t)surface_id[surf_id];
 surf_id = surf_id + 1;
-if(surf_id > 15){
+if(surf_id > 19){
 surf_id = 0;
 }
 

@@ -156,9 +156,9 @@ cout <<"Source Pixel Format:"<<sc->videoctx->pix_fmt<<endl;
 cout <<"Destination Pixel Format:"<<dstfmt<<endl;
 numBytes=avpicture_get_size(dstfmt ,width,height);
 cout <<"Size of Video Buffer:"<<numBytes<<endl;
-//vidbuffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
-VAStatus va_status;
-va_status = vaMapBuffer ((VADisplay *)sc->display,va_image->buf,(void **)&vidbuffer);
+vidbuffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
+//VAStatus va_status;
+//va_status = vaMapBuffer ((VADisplay *)sc->display,va_image->buf,(void **)&vidbuffer);
 
 avpicture_fill((AVPicture *)sc->vidframe1, vidbuffer, dstfmt ,width, height);
 cout <<" ---- "<<sc->videoctx->pix_fmt<<" - "<<sc->videoctx->height<<" - "<<sc->videoctx->width<<endl;

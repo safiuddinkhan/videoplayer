@@ -208,8 +208,6 @@ pthread_mutex_unlock(&sc->pauselock);
 
 ret = getdecodedvideoframe(sc,vidframe);
 //cout <<"Video Decoder Status:"<<ret<<endl;
-
-
 if(ret == -1){
 break;
 }else if(ret == -2){
@@ -325,11 +323,7 @@ sc->video_callback(sc->videoctx->hwaccel_context,(void**)vidframe->data,sc->vidf
 
 
 
-//pthread_mutex_lock(&sc->video_seek_status_lock);
-if(sc->videoseek == 1){
-  sc->videoseek = 0;
-}
-//pthread_mutex_unlock(&sc->video_seek_status_lock);
+
 
 //sc->status = MP_PLAYING;
 //put_status(MP_PLAYING,sc);
@@ -340,8 +334,11 @@ if(sc->videoseek == 1){
 
 //}
 }else{
-
   cout <<"Releasing CPU time for video thread..."<<pthread_yield()<<endl;	
+}
+
+if(sc->videoseek == 1){
+  sc->videoseek = 0;
 }
 
 //

@@ -177,6 +177,7 @@ pthread_mutex_unlock(&sc->pauselock);
 
 
 ret = getdecodedaudioframe(sc,audioframe);
+
 if(ret == -1){
 break;
 }else if(ret == -2){
@@ -294,11 +295,7 @@ av_usleep(delay);
 
 sc->audio_callback(dst_data,ret,sc->audiopts,sc->opaque);
 //cout <<"Hello7...1"<<endl;
-//pthread_mutex_lock(&sc->audio_seek_status_lock);
-if(sc->audioseek == 1){
-  sc->audioseek = 0;
-}
-//pthread_mutex_unlock(&sc->audio_seek_status_lock);
+
 
 //put_status(MP_PLAYING,sc);
 
@@ -312,8 +309,11 @@ if(sc->audioseek == 1){
 
 
 }else{
-  
   cout <<"Releasing CPU time for audio thread..."<<pthread_yield()<<endl;
+}
+
+if(sc->audioseek == 1){
+  sc->audioseek = 0;
 }
 
 

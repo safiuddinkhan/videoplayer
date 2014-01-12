@@ -26,6 +26,7 @@ int done = 0;
 int height;
 int width;
 int hw_accel = 0;
+
 Window window;
 mediaplayer *mp;
 int toggle_fullscreen = 0;
@@ -35,6 +36,7 @@ Display *display;
 XvPortID port;
 Window window;
 GC gc;
+Pixmap pixmap;
 unsigned int format;
 int width;
 int height;
@@ -84,7 +86,7 @@ while(true){
 
 
 ////////////////////////////////////////////////////// debug display
-char text[100];
+char text[200];
 sprintf(text,"Video PTS: %f - Audio PTS: %f - Master Clock: %f",c->videopts,c->audiopts,mp->getpos());
 XSetForeground(c->display, c->gc, WhitePixel(c->display, DefaultScreen(c->display)));
 int tw = XTextWidth(c->font, text, strlen(text));
@@ -126,12 +128,12 @@ memcpy((c->image->data+c->image->offsets[2])+(y/2 * c->image->pitches[2]),(char 
 
 }
 
-memcpy(c->vidbuffer,c->image->data,c->image->data_size);
+//memcpy(c->vidbuffer,c->image->data,c->image->data_size);
 
 }else{
-memcpy(c->vidbuffer,data[0],c->va_image->data_size);
+//memcpy(c->vidbuffer,data[0],c->va_image->data_size);
 
-//c->image->data = (char *)data[0];  
+c->image->data = (char *)data[0];  
 }
 */
 //memcpy(c->vidbuffer,data[0],c->va_image->data_size);
@@ -141,17 +143,15 @@ cout <<"width:"<<c->va_image->width<<" - height:"<<c->va_image->height<<endl;
 //memcpy(c->vidbuffer,data[0],c->va_image->offsets[1]);
 //memcpy(c->vidbuffer+c->va_image->offsets[1],data[1],c->va_image->offsets[2] - c->va_image->offsets[1]);
 //memcpy(c->vidbuffer+c->va_image->offsets[2],data[2],c->va_image->data_size - c->va_image->offsets[2]);
-
-//memcpy(c->vidbuffer,data[0],c->va_image->data_size);
-
 VAStatus va_status;
-va_status = vaSyncSurface(c->va_dpy, c->surface_id);
-if(va_status == VA_STATUS_SUCCESS){
- //cout <<"Successful..."<<endl;
-}
 
 
+va_status = vaMapBuffer (c->va_dpy,c->va_image->buf,(void **)&c->vidbuffer);
+memcpy(c->vidbuffer,data[0],c->va_image->data_size);
+va_status = vaUnmapBuffer (c->va_dpy,c->va_image->buf);  
 va_status = vaPutImage (c->va_dpy,c->surface_id,c->va_image->image_id,0,0,c->width,c->height,0,0,c->width,c->height);
+
+
 
 vaPutSurface(c->va_dpy, c->surface_id, window,
                         0, 0,
@@ -159,7 +159,15 @@ vaPutSurface(c->va_dpy, c->surface_id, window,
                         0, 0,
                         c->new_width, c->new_height,
                         NULL, 0,
-                        VA_FRAME_PICTURE);
+                        VA_FRAME_PICTURE | VA_FILTER_SCALING_FAST | VA_SRC_BT709);
+
+va_status = vaSyncSurface(c->va_dpy, c->surface_id);
+if(va_status == VA_STATUS_SUCCESS){
+ //cout <<"Successful..."<<endl;
+}
+
+//XCopyArea(c->display, c->pixmap, window, c->gc, 0, 0, c->new_width, c->new_height,  0, 0);
+// XSync(c->display, False);
 //XvPutImage( c->display, c->port, c->window, c->gc, c->image, 0, 0, c->image->width, c->image->height, 0, 0, c->new_width, c->new_height);
 
 
@@ -178,10 +186,6 @@ VAStatus va_status;
 //vaapi_context *vc = (vaapi_context*)hardware_context;
 //va_dpy = vc->display;
 
-va_status = vaSyncSurface(c->va_dpy, id);
-if(va_status == VA_STATUS_SUCCESS){
- //cout <<"Successful..."<<endl;
-}
 
 
 
@@ -195,8 +199,12 @@ vaPutSurface(c->va_dpy, id, window,
                         0, 0,
                         c->new_width, c->new_height,
                         NULL, 0,
-                        VA_FRAME_PICTURE);
+                        VA_FRAME_PICTURE | VA_FILTER_SCALING_FAST | VA_SRC_BT709);
 
+va_status = vaSyncSurface(c->va_dpy, id);
+if(va_status == VA_STATUS_SUCCESS){
+ //cout <<"Successful..."<<endl;
+}
 
 
 
@@ -226,7 +234,7 @@ ao_play(c->device, (char *)data, size*c->channels*(c->audio_format->bits/8));
 }
 
 
-
+/*
 static Atom xv_intern_atom_if_exists( Display *display, XvPortID port,
                                       char const *atom_name )
 {
@@ -250,7 +258,7 @@ static Atom xv_intern_atom_if_exists( Display *display, XvPortID port,
 
   return xv_atom;
 }
-
+*/
 Bool waitForNotify( Display *, XEvent *e, char *arg )
 {
   return ( e->type == MapNotify ) && ( e->xmap.window == (Window)arg );
@@ -262,7 +270,7 @@ int main(int argc, char *argv[]){
 XInitThreads();
   Display *display = XOpenDisplay( NULL );
 
-
+/*
  unsigned int ver, rel, req, ev, err;
     bool retVal =
       ( XvQueryExtension( display, &ver, &rel, &req, &ev, &err ) == Success );
@@ -299,7 +307,7 @@ unsigned int adaptors;
  //XvGrabPort( display, 87, CurrentTime);
  //port = 87;
   cout << "Xv port is " << port << endl;
-
+*/
 
   int colourkey = 0;
 /*
@@ -328,6 +336,8 @@ if(XvSetPortAttribute( display, port, sync, 1 )!= Success )
 return 1;
 }
 */
+
+/*
   unsigned int formats;
   XvImageFormatValues *fo;
   fo = XvListImageFormats( display, port, (int *)&formats );
@@ -345,14 +355,15 @@ return 1;
   };
   if ( !format )
     return 1;
-
+*/
     int depth;
-  {
+  //{
     XWindowAttributes attribs;
     XGetWindowAttributes( display, DefaultRootWindow( display ), &attribs );
     depth = attribs.depth;
-    if (depth != 15 && depth != 16 && depth != 24 && depth != 32) depth = 24;
-  }
+   // if (depth != 15 && depth != 16 && depth != 24 && depth != 32) depth = 24;
+    cout <<"depth:"<<depth<<endl;
+  //}
   XVisualInfo visualInfo;
   XMatchVisualInfo( display, DefaultScreen( display ), depth, TrueColor,
                     &visualInfo );
@@ -386,7 +397,7 @@ pthread_cond_init (&threadcontrol, NULL);
 //mp = new mediaplayer(argv[1],(char *)"YV12",display);
 
 void *disp = (void *)init_vaapi(display);
-
+cout <<vaQueryVendorString ((VADisplay)disp)<<endl;
 mp = new mediaplayer(argv[1],disp);
 
 /*
@@ -519,10 +530,10 @@ cout <<"Error could not load the fonts"<<endl;
 
  
  c.display = display;
- c.port = port;
+ //c.port = port;
  c.window = window;
  c.gc = gc;
- c.colourmap = colourMap;
+ //c.colourmap = colourMap;
 /////////////////////////
 height = mp->height;
 width = mp->width;
@@ -531,7 +542,7 @@ width = mp->width;
  c.width = width;
  c.new_height = height;
  c.new_width = width;
- c.format = format;
+ //c.format = format;
 ////////////////////////////////////////////////////////////////////////////////
 
 int default_driver;
@@ -580,6 +591,9 @@ c.device = ao_open_live(default_driver, c.audio_format, NULL);
 //mp->window = window;
 //mp->pix = pix;
 //mp->gc = gc;
+//Pixmap pixmap = XCreatePixmap(display, window, width, height, depth);
+//c.pixmap = pixmap;
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 c.va_dpy = (VADisplay *)disp; 
 c.va_format = get_vaformat(get_pixelformat(MP_YV12),(VADisplay *)disp);
@@ -588,7 +602,6 @@ VAStatus va_status;
 va_status = vaCreateSurfaces(c.va_dpy,VA_RT_FORMAT_YUV420,width,height,&c.surface_id, 1,NULL, 0);
 c.va_image = (VAImage *)malloc(sizeof(VAImage)); 
 va_status = vaCreateImage (c.va_dpy,c.va_format,width,height,c.va_image);
-//va_status = vaMapBuffer (c.va_dpy,c.va_image->buf,(void **)&c.vidbuffer);
 mp->va_image = c.va_image;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 mp->set_pixel_format(MP_YV12);
@@ -634,18 +647,26 @@ XGetWindowAttributes(display,window,attrib);
 c.new_width = attrib->width;
 c.new_height = attrib->height;
 if(done == 0){
-      XSetForeground( display, gc, colourkey );
-      XFillRectangle( display, window, gc, 0, 0, c.new_width, c.new_height);
+  //    XSetForeground( display, gc, colourkey );
+   //   XFillRectangle( display, window, gc, 0, 0, c.new_width, c.new_height);
 }
 //pthread_mutex_lock(&c.display_lock);
 if(hw_accel == 0){
+
 vaPutSurface(c.va_dpy, c.surface_id, window,
                         0, 0,
                         c.width, c.height,
                         0, 0,
                         c.new_width, c.new_height,
                         NULL, 0,
-                        VA_FRAME_PICTURE);
+                        VA_FRAME_PICTURE | VA_FILTER_SCALING_FAST | VA_SRC_BT709);
+
+va_status = vaSyncSurface(c.va_dpy, c.surface_id);
+if(va_status == VA_STATUS_SUCCESS){
+ //cout <<"Successful..."<<endl;
+}
+
+
 //  cout <<"No Hardware Acceleration Enabled..."<<endl;
  //       XvPutImage( display, port, window, gc,
  //                   c.image, 0, 0, width, height, 0, 0, c.new_width, c.new_height );
@@ -694,6 +715,8 @@ mp->stop();
 if ( event.xkey.keycode == 33 ){
 mp->play();
 }
+
+
 
 if ( event.xkey.keycode == 36 ){
   
@@ -767,12 +790,12 @@ endprog:
 
   XFree( c.image );
  // // XSync( display, False ); ?
-  XFreeGC( display, gc );
-  XvUngrabPort( display, port, CurrentTime );
+  //XFreeGC( display, gc );
+  //XvUngrabPort( display, port, CurrentTime );
   XDestroyWindow( display, window );
   XFreeColormap( display, colourMap );
-  XvFreeAdaptorInfo(ai);
-  XFree(fo);
+  //XvFreeAdaptorInfo(ai);
+  //XFree(fo);
   XCloseDisplay( display );
  ao_close(c.device);
  ao_shutdown();

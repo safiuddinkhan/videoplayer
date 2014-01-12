@@ -24,6 +24,7 @@ VADisplay init_vaapi(Display * display);
 VAImageFormat * get_vaformat(enum AVPixelFormat fmt,VADisplay* va_dpy);
 
 
+
 /*
 class vaapi_upload: public vaapi{
 private:
